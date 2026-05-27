@@ -13,6 +13,7 @@ EPSILON = 1 * 10 ** -5 #[m]
 NU = 3 * 10 ** -7 #[m2/s]
 Z_PUMP= -0.5 #[m]
 
+# Needed parameters that were not included in original file
 NUMBER_OF_TURNS = 7 #[no units]
 TURN_FRICTION_FACTOR = 0.75 #[no units]
 P_IN = 222915 #[Pa]
@@ -24,42 +25,66 @@ P_VAPOR = 5000 #[Pa]
 g = 9.81 # gravity [m/s^2]
 
 eD = [0.00001, 0.0001, 0.001] # Relative roughness values to be used in the graph
-Re_Laminar = np.geomspace(1e3, 4000, 20) # Reynolds numbers from 10^2 to 4e3
-Re_Turbulent = np.geomspace(4001, 1e8, 50) # Reynolds numbers from 10^4 to 10^8
-# 4000 was ommited from the turbulent range to create the discontinuity in the 
-# graph between laminar and turbulent flow
+Re_Laminar = np.geomspace(1e3, 4000, 20) # Reynolds numbers from 10^2 to 4000
+Re_Turbulent = np.geomspace(4001, 1e8, 50) # Reynolds numbers from 4000 (not including) to 10^8
 
-# -------- Part A --------
 
-# ------- Validation ---------
-def Check_Roughness(eD): #Checks if the relative roughnes in within the bounds for the approximation
+
+# ===============================================
+# ================== Part A =====================
+# ================================================
+
+
+# ============ Q1: Find Fanning friction factor ============================
+
+def Check_Roughness(eD:float) -> bool: 
+    
+    """
+    Checks if the relative roughnes in within the bounds for the approximation.
+    """
     
     if eD < 0 or eD > 0.01:
         return False
     else:
         return True
 
-def Check_Reynolds_Type(Re): #Checks in which flow regime the system is in
+def Check_Reynolds_Type(Re:float) -> str | bool:
      
-    if Re <= 0 or Re > 1e8: # Reynolds is not physical
+     """
+     Checks which flow regime the system is in. 
+     
+     If Reynolds number is negative or too high for the approximation to be valid, returns False.
+     Otherwise, returns 'Laminar' for laminar flow and 'Turbulent' for turbulent flow.
+
+     Reynolds number range: 0 < Re <= 1e8
+     """
+
+     if Re <= 0 or Re > 1e8: 
         return False
     
-    elif 0 < Re < 4001: # Laminar flow
+     elif 0 < Re <= 4000: 
         return 'Laminar'
     
-    elif 4001 <= Re <= 1e8: # Turbulent flow
+     elif 4000 < Re <= 1e8: 
           return 'Turbulent'
-    
 
-# ------ Q1: Find Fanning friction factor --------
+def f_fanning(Re: float, eD: float) -> float:
 
-def f_fanning(Re, eD):
+    """
+    Calculatees the Fanning friction factor for a given Reynolds number and relative roughness.
     
+    If the relative roughness or Reynolds number are not valid, returns ff=0 and an error message
+    If flow laminar, calculate ff unsing the formula: 16/Re
+    If flow turbulent, calculate ff using the formula: 1.375 * 1e-3 * (1 + (2 * 1e4 * eD + 1e6 / Re) ** (1/3))
+    """
+
     Roughness = Check_Roughness(eD)
     Flow = Check_Reynolds_Type(Re)
 
-    if not Roughness or (Flow != 'Laminar' and Flow != 'Turbulent'): # If the input values are not valid, return 0
-        return 0
+    if not Roughness or not Flow: 
+        ff = 0
+        print('error in one of the inserted values:')
+        return ff
 
     if Flow == 'Laminar':
         ff = 16 / Re
@@ -69,24 +94,36 @@ def f_fanning(Re, eD):
         ff = 1.375 * 1e-3 * (1 + (2 * 1e4 * eD + 1e6 / Re) ** (1/3))
         return ff
 
+# ============ Q2: Graph F_f vs Re =========================================
 
-# ------ Q2: Graph F_f vs Re  ---------
+def graph_F_f_vs_Re(eD: np.ndarray, Re_Laminar: np.ndarray, Re_Turbulent: np.ndarray):
 
-def graph_F_f_vs_Re(eD, Re_Laminar, Re_Turbulent):
+    """
+    Graphs the Fanning friction factor as a function of the relative roughness and the Reynolds number 
+    in the laminer and turbulent regimes (The Moody Diagram).
+
+    Output is a single figure with one plot for the laminer regime and a plot for each relative roughness in the turbulent regime.
+    
+    The graph is in loglog scale 
+    """
+
     fig, ax = plt.subplots(figsize=(10, 6))
-    f_Laminar = [f_fanning(Re, 0) for Re in Re_Laminar] # Roughness doesn't affect laminar flow
+
+    f_Laminar = [f_fanning(Re, 0) for Re in Re_Laminar] # friction factors for the laminar regime (roughness doesn't affect laminar flow)
+
     ax.loglog(Re_Laminar, f_Laminar, color='brown')
 
-    color = ['royalblue', 'green', 'mediumpurple'] # similar colours as provided in the test case
+    color = ['royalblue', 'green', 'mediumpurple'] # similar colors for the turbulent plots as provided in the test case
 
-    for i, eD_value in enumerate(eD): #Claculate the fanning number for each eD values
+    for i, eD_value in enumerate(eD): # Claculate the fanning number for each eD values for turbulant Re
         f_Turbulent = [f_fanning(Re, eD_value) for Re in Re_Turbulent]
-        ax.loglog(Re_Turbulent, f_Turbulent, color=color[i])
+        ax.loglog(Re_Turbulent, f_Turbulent, color=color[i] if i < len(color) else None) #if more eD values are added, generate random colors
         ax.annotate(f'{eD_value}', xy=(4e7, f_Turbulent[-1]),
                     xytext=(0, 2),  
                     textcoords='offset points', 
                     va='bottom',
                     ha='center',fontsize=9)
+    
     ax.set_xlabel('Reynolds Number')
     ax.set_ylabel('Fanning Friction Factor')
     ax.set_title('Moody Diagram')
@@ -100,67 +137,80 @@ def graph_F_f_vs_Re(eD, Re_Laminar, Re_Turbulent):
     plt.tight_layout()
     plt.show()
 
-# ------ Q3: Frictional losses as a function of flow rate --------
+# ============ Q3: Frictional losses as a function of flow rate ============
 
-def find_flow_velocity(F): # Finds the average flow velocity for a given flow rate
-    A = math.pi * (D_PIPE / 2) ** 2 #pipe cross-section area
+def find_flow_velocity(F: float) -> float: 
+
+    """
+    Calculates the average flow velocity for a given flow rate using the flow rate and pipe cross section: 
+    A_cross_section_pipe = π * r^2 = π * (D/2)^2 
+
+    Flow rate units (input) -> [m^3/s]
+    Pipe diameter -> [m]
+    Pipe Area -> [m^2]
+    Average fluid velocity units (output) -> [m/s] 
+    """
+
+    A = math.pi * (D_PIPE / 2) ** 2 
     V = F / A 
-    return V
+    return V 
 
-def find_reynolds_number(F): # Finds the Reynolds number for a given flow rate
+def find_reynolds_number(F: float) -> float: 
+
+    """
+    Calculates the Reynolds number in a pipe by a given flow rate using kinematic viscocity
+
+    Flow rate units (input) -> [m^3/s]
+    Average fluid velocity -> [m/s]
+    Pipe diameter -> [m]
+    Kinematic viscocity / NU -> [m^2/s]
+    Reynolds (output) -> [no units]
+    """
+
     V = find_flow_velocity(F)
     Re = V * D_PIPE / NU
     return Re
 
-def find_h_LT(F): #calculates the friction loss as a function of flow [m^3/s]
-    
-    V = find_flow_velocity(F) #average flow velocity
-    Re = find_reynolds_number(F) # Reynolds number
-    eD = EPSILON / D_PIPE # Relative roughness
-    ff = f_fanning(Re, eD) # Fanning friction factor
+def find_h_LT(F: float) -> float: 
+
+    """
+    Calcualtes the total frictional head loss as a function of the flow rate and pipe parameters.
+
+    Flow rate units (input) -> [m^3/s]
+    Average fluid velocity -> [m/s]
+    Reynolds -> [no units]
+    Fanning friction factor -> [no units]
+    Absolute pipe roughness / Epsilon -> [m]
+    Pipe diameter -> [m]
+    Pipe length -> [m]
+    No. of turns & turn friction factor -> [no units]
+    Total frictional head loss -> [m^2/s^2]
+    """
+
+    V = find_flow_velocity(F) 
+    Re = find_reynolds_number(F) 
+    eD = EPSILON / D_PIPE 
+    ff = f_fanning(Re, eD) 
      
     h_LT = (ff * (L_PIPE / D_PIPE) + 
-            NUMBER_OF_TURNS * TURN_FRICTION_FACTOR) * 2* V ** 2 # Frictional head loss
+            NUMBER_OF_TURNS * TURN_FRICTION_FACTOR) * 2* V ** 2 
     
-    return h_LT #[m^2/s^2]
+    return h_LT 
 
 
-# ------ Checks for Q1 ------
-def Check_PartA_Q1():
-    Check1_Re, Check1_eD = 1000, 0.03
-    Check2_Re, Check2_eD = 0, 0.001
-    Check3_Re, Check3_eD = 1000, 0.001
-    Check4_Re, Check4_eD = 4000, 0.0007
-    Check5_Re, Check5_eD = 10e6, 0.00003
-    Check6_Re, Check6_eD = 153475, 0.000576
+# ===============================================
+# ================== Part B =====================
+# ================================================
 
-    print(f'ff={round(f_fanning(Check1_Re, Check1_eD),3)}')
-    print(f'ff={round(f_fanning(Check2_Re, Check2_eD),3)}')
-    print(f'ff={round(f_fanning(Check3_Re, Check3_eD),3)}')
-    print(f'ff={round(f_fanning(Check4_Re, Check4_eD),3)}')
-    print(f'ff={round(f_fanning(Check5_Re, Check5_eD),3)}')
-    print(f'ff={round(f_fanning(Check6_Re, Check6_eD),3)}')
+# ============= Q1: Import impeller data and approximate to 2nd degree polynomial =============
 
-# ------ Checks for Q2 ------
-def Check_PartA_Q2():
-    graph_F_f_vs_Re(eD, Re_Laminar, Re_Turbulent)
+"""
+Load the impellers data from the CSV file, 
+and create a dictionary for the different impeller sizes and their corresponding column in the CSV file
+"""
 
-#------ Checks for Q3 ------
-def Check_PartA_Q3():
-    h_LT_value = find_h_LT(F)
-    print(f'Frictional head loss (h_LT) for flow rate F={F:.3f} [m^3/s]: {h_LT_value:.3f} [m^2/s^2]')
-
-# Checks
-Check_PartA_Q1(), Check_PartA_Q2(), Check_PartA_Q3()
-
-# ------ Part B --------
-
-# ----- Q1: Import impeller data and approximate to 2nd degree polynomial --------
-
-# Load the impeller data from the CSV file
 impeller_data = np.loadtxt('lab1_impellers.csv', delimiter=',', skiprows=2) 
 
-# Dictionary to map impeller sizes to their corresponding column indices in the CSV data
 impeller_size_dict = { 
     '5&11/16': 2,
     '6': 0,
@@ -168,33 +218,47 @@ impeller_size_dict = {
     '6&7/8': 6
 } 
 
-def find_pump_head(impeller_data, impeller_size:str): 
-    
+def find_pump_head(impeller_data: np.ndarray, impeller_size:str) -> tuple[np.ndarray, int]: 
+
     """
-    Function that takes the raw impeller data and str of impeller size (in inches) 
+    Calculates the pump head by taking the raw impeller data and str of impeller size (in inches) 
     and returns a 2nd order polynomial approximation.
-    Flow rate in csv is in m^3/hr, head is in [m]
-    Flow rate in polynomial is in m^3/s
-    Valid impeller sizes are: 6, 5&11/16, 6&9/16, 6&7/8 [inch] (str!!!)
+    Valid impeller sizes are: 5&11/16", 6", 6&9/16", 6&7/8" [inch] (str!!!)
+
+    ------ Units ------
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    Impeller size (input) -> str [inches]
+    Impeller size col (output) -> [no units]
+    Flow rate in polynomial (output) -> [m^3/s]
     """
     
     if str(impeller_size) not in impeller_size_dict: # Check if the impeller size is valid
         raise ValueError(f"Invalid impeller size. Valid sizes are: {', '.join(impeller_size_dict.keys())}")
 
     col = impeller_size_dict[str(impeller_size)]
-    x = impeller_data[:, col] # Flow rate (Q) [m3/h]
+    x = impeller_data[:, col] 
     x_m3s = x / 3600 # Convert flow units (m3/h -> m3/s)
-    y = impeller_data[:, col+1] # Head (H) [m]
+    y = impeller_data[:, col+1] 
     
     coeffs = np.polyfit(x_m3s, y, 2) # Fit a 2nd degree polynomial 
     polynomial = np.poly1d(coeffs) # Create a polynomial from coefficients
     
-    return polynomial, col # Polynomial in [m^3/s]
+    return polynomial, col
 
-# ----- Q2: Find the system head and graph the pump and system curve --------
+# ============= Q2: Find the system head and graph the pump and system curve ===================
 
-def find_system_head(F): # Function of flow rate (F) [m^3/s] 
+def find_system_head(F: float) -> float: # Function of flow rate (F) [m^3/s] 
     
+    """
+    Calculates the system head using the known bernoulli equation 
+    with the frictional head losses function.
+    
+    ---- Units -----
+    Flow rate (input) -> [m^3/s]
+    H_system (output) -> [m]
+    """
+
     v_ave_in = 0 # fluid at top of tank is static [m/s]
     v_ave_out = find_flow_velocity(F) # Average flow velocity [m/s]
     h_LT = find_h_LT(F) # Frictional head loss [m^2/s^2]
@@ -203,12 +267,24 @@ def find_system_head(F): # Function of flow rate (F) [m^3/s]
 
     return H_system
 
-def graph_pump_and_system_curves(impeller_data, impeller_size): # Graph the pump curve and system curve on the same plot
+def graph_pump_and_system_curves(impeller_data: np.ndarray, impeller_size:str): 
+    
+    """
+    Graphs the pump curve and system curve on the same plot for a single impeller size. 
+    Also plots intersection between the two curves (working point).
+
+    ----- Units -----
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    Impeller size (input) -> str [inches]]
+    Flow rate -> [m^3/s]
+    """
+
     delta_H_pump, impeller_size_col = find_pump_head(impeller_data, impeller_size) # Get the polynomial function for the specified impeller size
     
-    F_values = impeller_data[:, impeller_size_col]  # Flow rates from csv data for the specified impeller size [m3/h]
-    H_pump = [delta_H_pump(F/3600) for F in F_values] # Calculate pump head for each flow rate(Flow rate converted  to [m^3/s])
-    H_system = [find_system_head(F/3600) for F in F_values] # Calculate system head for each flow rate (Flow rate converted  to [m^3/s])
+    F_values = impeller_data[:, impeller_size_col]  # Flow rates from csv data for the specified impeller size 
+    H_pump = [delta_H_pump(F/3600) for F in F_values] # Flow rate [m^3/hr] -> [m^3/s]
+    H_system = [find_system_head(F/3600) for F in F_values] # Flow rate [m^3/hr] -> [m^3/s]
     
     working_point = find_working_point(impeller_data, impeller_size) # Find the working point of the pump
 
@@ -229,12 +305,27 @@ def graph_pump_and_system_curves(impeller_data, impeller_size): # Graph the pump
     plt.grid()
     plt.show()
 
-# ----- Q3: Find the working point of the pump --------
+# ============= Q3: Find the working point of the pump =========================================
 
-def find_working_point(impeller_data, impellar_size): # Working point -> delta_H_pump = delta_H_system
-    delta_H_pump, _ = find_pump_head(impeller_data, impellar_size) 
+def find_working_point(impeller_data: np.ndarray, impellar_size: str) -> tuple[float, float]: 
+    
+    """
+    Calculates the working point of the pump (delta_H_pump = delta_H_system) for the global system setting
+    and a specified impeller size.
+    Working point calculated using fsolve() of the difference between system and pump heads. 
+    Tolerence for fsolve() = 0.001, initial  guess = 0.005 [m^3/s]
 
-    def head_difference(F): # head_difference = delta_H_pump - delta_H_system
+    ----- Units -----
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    Impeller size (input) -> str [inches]
+    Flow rate -> [m^3/s]
+    Flow rate (output) -> [m^3/hr]
+    """
+    
+    delta_H_pump, _ = find_pump_head(impeller_data, impellar_size) # gets polynomial approx for pump head
+
+    def head_difference(F: float) -> float: # head_difference = delta_H_pump - delta_H_system
 
         H_pump = delta_H_pump(F) # Flow in [m3/s]
         H_system = find_system_head(F) # Flow in [m3/s]
@@ -246,44 +337,62 @@ def find_working_point(impeller_data, impellar_size): # Working point -> delta_H
     
     return F_at_working_point*3600, Head_at_working_point # Convert flow rate units [m3/s] -> [m3/h] 
 
-# ----- Checks -----
 
-def Check_PartB():
-    graph_pump_and_system_curves(impeller_data, "6") # Graph for 6 inch impeller
-    working_point = find_working_point(impeller_data, "6") # Check the working point for the 6 inch impeller
-    F_at_working_point, Head_at_working_point = round(working_point[0].item(),3), round(working_point[1].item(),3)
-    print(f'The flow rate at the working point is {F_at_working_point} [m^3/h] \nThe head at the working point is {Head_at_working_point} [m]') 
+# ===============================================
+# ================== Part C =====================
+# ================================================
 
-#Check_PartB()
 
-# ----- Part C --------
+# ============= Q1: graph the pump and system curves for all impeller sizes on the same plot =============
 
-# ----- Q1: graph the pump and system curves for all impeller sizes on the same plot --------
+def delta_H_pump_for_all_impeller_sizes(impeller_data: np.ndarray) -> dict: # Get the polynomial function for all impeller sizes
+    
+    """
+    Calculates the polynomial approximations for the pump heads of each impeller size in the csv.
+    The function returns a dictionary with the impeller sizes as keys and the corresponding 
+    polynomial functions for the pump head as values.
+    
+    ----- Units -----
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    Impeller sizes.keys() -> str [inches]
+    Impeller sizes.item() -> int
+    Flow rate in polynomials (output)-> [m^3/s]
+    """
 
-def delta_H_pump_for_all_impeller_sizes(impeller_data): # Get the polynomial function for all impeller sizes
-    '''
-    This function returns a dictionary with the impeller sizes as keys and the corresponding polynomial functions for the pump head as values.
-    '''
     impeller_head_functions = {} # Dictionary to store the polynomial functions for each impeller size
     
     for impeller_size in impeller_size_dict.keys(): # Loop through all impeller sizes
-        delta_H_pump, _ = find_pump_head(impeller_data, impeller_size)
-        impeller_head_functions[impeller_size] = delta_H_pump
+        delta_H_pump, _ = find_pump_head(impeller_data, impeller_size) # returns polynomial with flow in [m^3/s]
+        impeller_head_functions[impeller_size] = delta_H_pump # adds poly to dict (impeller_sizee -> keys, delta_H_pump -> items)
 
     return impeller_head_functions
 
-def graph_all_impeller_sizes(impeller_data): # Graph the pump and system curves for all impeller sizes on the same plot
-    '''
-    Graphs the pump and system curves for all impeller sizes on the same plot.
-    Uses the polynomial functions for the pump heads of all impeller sizes from the dictionary
-    '''
+def graph_all_impeller_sizes(impeller_data: np.ndarray): # Graph the pump and system curves for all impeller sizes on the same plot
+    
+    """
+    Graphs the pump curve and system curve on the same plot for all impeller sizes on a single plot. 
+    Also plots working points for each impeller size, as well as the efficiency plots from the 
+    relevent csv.
+    Boolean flag used for the pump curve used to not create multiple identical legend entries.
+    NSPH Required axis was also added (log scale) to show the working points NPSH Required.
+    Flow rate list form the csv is cut at 65 [m^3/hr] for aesthetic cutoff of all curves at same point.
+   
+    ----- Units -----
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    Impeller size (input) -> str [inches]
+    Flow rate -> [m^3/s]
+    Flow rate in graph -> [m^3/hr]
+    Head in graph -> [m]
+    """
     
     delta_H_pump_functions = delta_H_pump_for_all_impeller_sizes(impeller_data) # Dictionary of polynomials for all impeller sizes 
     
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     labels_added = False #  Check if label for the pump curve is added to the legend
-    max_F = 65 # Maximum flow rate for plotting, based on the test cases
+    max_F = 65 # [m^3/hr] Maximum flow rate for plotting, based on the test cases
 
     for impeller_size, delta_H_pump in delta_H_pump_functions.items():
     
@@ -320,7 +429,7 @@ def graph_all_impeller_sizes(impeller_data): # Graph the pump and system curves 
     ax1.set_ylabel('h (m)')
     ax2.set_xlabel('NPSH Required (m)')
 
-    ax2.set_xticks([2, 4, 6, 8, 10, 12, 14, 16])
+    ax2.set_xticks([2, 4, 6, 8, 10, 12, 14, 16]) # NPSH_R values for the axis as seen in the tests
     ax2.set_xticklabels(['2', '4', '6', '8', '10', '12', '14', '16'])
     
     plt.title(f'Pump and System Curves for all Impeller Sizes')
@@ -329,22 +438,41 @@ def graph_all_impeller_sizes(impeller_data): # Graph the pump and system curves 
     plt.tight_layout()
     plt.show()
 
-# ----- Q2: Find the working points for all impeller sizes --------
-def find_working_points_all_impeller_sizes(impeller_data): # Find the working points for all impeller sizes
+# ============= Q2: Find the working points for all impeller sizes =======================================
+
+def find_working_points_all_impeller_sizes(impeller_data: np.ndarray) -> dict: # Find the working points for all impeller sizes
     
-    working_points = {}
+    """
+    Calculates the working points for each impeller size and inserts in a dictionary,
+    where the impeller sizes (in str) are the keys and the working point coordinates are the items. 
+    The working points are given as a tuple, with x coord = Flow rate @ working point [m^3/hr] and
+    y coord = Head @ working point [m]
+    
+    ----- Units -----
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    Impeller size -> str [inches]
+    Flow rate @ working points -> [m^3/hr]
+    Head @ working points -> [m]
+    """
+
+    working_points = {} 
     
     for impeller_size in impeller_size_dict.keys():
-        working_point = find_working_point(impeller_data, impeller_size)
+        working_point = find_working_point(impeller_data, impeller_size) # Tuple of working point coords (Flow rate [m^3/hr], Head [m])
         working_points[impeller_size] = working_point
     
     return working_points
 
-# ----- Q3: NPSH_Required and Available for all impeller sizes --------
-def NPSH_Required(F): # Calculate NPSH_Required for a given impeller size
-    '''
+# ============= Q3: NPSH_Required and Available for all impeller sizes ===================================
+
+def NPSH_Required(F: float) -> float: 
+    """
     Calculates the required net positive suction head for a given flow rate. The input Flow Rate must be in [m^3/hr]
-    '''
+    
+    Change units to imput at m3/s instea of m3/hr
+    
+    """
     NPSH_Required = 0.5761 * np.exp(0.0511 * F)
     
     return NPSH_Required
@@ -412,3 +540,43 @@ def Check_PartC_Q3():
     Check_NPSH_for_all_impeller_sizes(impeller_data)
 
 Check_PartC_Q1(), Check_PartC_Q2(), Check_PartC_Q3()
+
+
+
+
+
+
+# ------ Checks for PartA ------
+def Check_PartA_Q1():
+    Check1_Re, Check1_eD = 1000, 0.03
+    Check2_Re, Check2_eD = 0, 0.001
+    Check3_Re, Check3_eD = 1000, 0.001
+    Check4_Re, Check4_eD = 4000, 0.0007
+    Check5_Re, Check5_eD = 10e6, 0.00003
+    Check6_Re, Check6_eD = 153475, 0.000576
+
+    print(f'ff={round(f_fanning(Check1_Re, Check1_eD),3)}')
+    print(f'ff={round(f_fanning(Check2_Re, Check2_eD),3)}')
+    print(f'ff={round(f_fanning(Check3_Re, Check3_eD),3)}')
+    print(f'ff={round(f_fanning(Check4_Re, Check4_eD),3)}')
+    print(f'ff={round(f_fanning(Check5_Re, Check5_eD),3)}')
+    print(f'ff={round(f_fanning(Check6_Re, Check6_eD),3)}')
+
+def Check_PartA_Q2():
+    graph_F_f_vs_Re(eD, Re_Laminar, Re_Turbulent)
+
+def Check_PartA_Q3():
+    h_LT_value = find_h_LT(F)
+    print(f'Frictional head loss (h_LT) for flow rate F={F:.3f} [m^3/s]: {h_LT_value:.3f} [m^2/s^2]')
+
+Check_PartA_Q1(), Check_PartA_Q2(), Check_PartA_Q3()
+
+# ----- Checks for PartB -----
+
+def Check_PartB():
+    graph_pump_and_system_curves(impeller_data, "6") # Graph for 6 inch impeller
+    working_point = find_working_point(impeller_data, "6") # Check the working point for the 6 inch impeller
+    F_at_working_point, Head_at_working_point = round(working_point[0].item(),3), round(working_point[1].item(),3)
+    print(f'The flow rate at the working point is {F_at_working_point} [m^3/h] \nThe head at the working point is {Head_at_working_point} [m]') 
+
+Check_PartB()
