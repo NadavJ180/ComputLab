@@ -71,7 +71,7 @@ def Check_Reynolds_Type(Re:float) -> str | bool:
 def f_fanning(Re: float, eD: float) -> float:
 
     """
-    Calculatees the Fanning friction factor for a given Reynolds number and relative roughness.
+    Calculates the Fanning friction factor for a given Reynolds number and relative roughness.
     
     If the relative roughness or Reynolds number are not valid, returns ff=0 and an error message
     If flow laminar, calculate ff unsing the formula: 16/Re
@@ -100,9 +100,9 @@ def graph_F_f_vs_Re(eD: np.ndarray, Re_Laminar: np.ndarray, Re_Turbulent: np.nda
 
     """
     Graphs the Fanning friction factor as a function of the relative roughness and the Reynolds number 
-    in the laminer and turbulent regimes (The Moody Diagram).
+    in the laminar and turbulent regimes (The Moody Diagram).
 
-    Output is a single figure with one plot for the laminer regime and a plot for each relative roughness in the turbulent regime.
+    Output is a single figure with one plot for the laminar regime and a plot for each relative roughness in the turbulent regime.
     
     The graph is in loglog scale 
     """
@@ -193,7 +193,7 @@ def find_h_LT(F: float) -> float:
     ff = f_fanning(Re, eD) 
      
     h_LT = (ff * (L_PIPE / D_PIPE) + 
-            NUMBER_OF_TURNS * TURN_FRICTION_FACTOR) * 2* V ** 2 
+            NUMBER_OF_TURNS * TURN_FRICTION_FACTOR) * 2 * V ** 2 
     
     return h_LT 
 
@@ -208,8 +208,9 @@ def find_h_LT(F: float) -> float:
 Load the impellers data from the CSV file, 
 and create a dictionary for the different impeller sizes and their corresponding column in the CSV file
 """
-
-impeller_data = np.loadtxt('lab1_impellers.csv', delimiter=',', skiprows=2) 
+from pathlib import Path
+DATA_DIR = Path(__file__).parent
+impeller_data = np.loadtxt(DATA_DIR / 'lab1_impellers.csv', delimiter=',', skiprows=2)
 
 impeller_size_dict = { 
     '5&11/16': 2,
@@ -307,7 +308,7 @@ def graph_pump_and_system_curves(impeller_data: np.ndarray, impeller_size:str):
 
 # ============= Q3: Find the working point of the pump =========================================
 
-def find_working_point(impeller_data: np.ndarray, impellar_size: str) -> tuple[float, float]: 
+def find_working_point(impeller_data: np.ndarray, impeller_size: str) -> tuple[float, float]: 
     
     """
     Calculates the working point of the pump (delta_H_pump = delta_H_system) for the global system setting
@@ -323,9 +324,9 @@ def find_working_point(impeller_data: np.ndarray, impellar_size: str) -> tuple[f
     Flow rate (output) -> [m^3/hr]
     """
     
-    delta_H_pump, _ = find_pump_head(impeller_data, impellar_size) # gets polynomial approx for pump head
+    delta_H_pump, _ = find_pump_head(impeller_data, impeller_size) # gets polynomial approx for pump head
 
-    def head_difference(F: float) -> float: # head_difference = delta_H_pump - delta_H_system
+    def head_difference(F: float) -> tuple[np.ndarray, np.ndarray]: # head_difference = delta_H_pump - delta_H_system
 
         H_pump = delta_H_pump(F) # Flow in [m3/s]
         H_system = find_system_head(F) # Flow in [m3/s]
@@ -375,7 +376,7 @@ def graph_all_impeller_sizes(impeller_data: np.ndarray): # Graph the pump and sy
     Also plots working points for each impeller size, as well as the efficiency plots from the 
     relevent csv.
     Boolean flag used for the pump curve used to not create multiple identical legend entries.
-    NSPH Required axis was also added (log scale) to show the working points NPSH Required.
+    NPSH Required axis was also added (log scale) to show the working points NPSH Required.
     Flow rate list form the csv is cut at 65 [m^3/hr] for aesthetic cutoff of all curves at same point.
    
     ----- Units -----
@@ -391,7 +392,19 @@ def graph_all_impeller_sizes(impeller_data: np.ndarray): # Graph the pump and sy
     
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    labels_added = False #  Check if label for the pump curve is added to the legend
+    eff_label_added = False
+    
+    efficiency_list = import_efficiency_data() # Import the efficiency data for all impeller sizes from the CSV file
+    for eff, (x_eff, y_eff) in efficiency_list.items(): # Plot the efficiency curves for all impeller sizes
+        
+        eff_label = 'efficiencies' if not eff_label_added else '_nolegend_' # Single label for the pump curve in the legend
+        eff_label_added = True
+        
+        ax1.plot(x_eff, y_eff, label=eff_label, color='blue') # Plot efficiency curve
+        ax1.annotate(f'{eff}', xy=(x_eff[0], y_eff[0]), xytext=(x_eff[0],y_eff[0]), fontsize=9, color='black')
+
+
+    H_pump_label_added = False #  Check if label for the pump curve is added to the legend
     max_F = 65 # [m^3/hr] Maximum flow rate for plotting, based on the test cases
 
     for impeller_size, delta_H_pump in delta_H_pump_functions.items():
@@ -405,17 +418,12 @@ def graph_all_impeller_sizes(impeller_data: np.ndarray): # Graph the pump and sy
         H_system = [find_system_head(F/3600) for F in F_values] # Calculate system head for each flow rate (Flow rate converted  to [m^3/s])
         working_point = find_working_point(impeller_data, impeller_size) # Find the working point of the pump
 
-        pump_label = '▲Hpump' if labels_added == 0 else '__nolegend__' # Single label for the pump curve in the legend
-        labels_added += 1
+        pump_label = '▲Hpump' if not H_pump_label_added else '_nolegend_' # Single label for the pump curve in the legend
+        H_pump_label_added = True
         
         ax1.plot(F_values, H_pump, label=pump_label, color='red') # Plot pump curve
         ax1.scatter(working_point[0], working_point[1], color='black', zorder=5) # Plot the working point
-        ax1.annotate(f'{impeller_size}"', xy=(0, H_pump[0]), xytext=(0,H_pump[0]+2), fontsize=10, color='black')
-    
-    efficiency_list = import_efficiency_data() # Import the efficiency data for all impeller sizes from the CSV file
-    for eff, (x_eff, y_eff) in efficiency_list.items(): # Plot the efficiency curves for all impeller sizes
-        ax1.plot(x_eff, y_eff, color='blue') # Plot efficiency curve
-        ax1.annotate(f'{eff}', xy=(x_eff[0], y_eff[0]), xytext=(x_eff[0],y_eff[0]), fontsize=9, color='black')
+        ax1.annotate(f'{impeller_size}"', xy=(0, H_pump[0]), xytext=(0,H_pump[0]+1), fontsize=10, color='black')
     
     ax1.plot(F_values, H_system, label='▲Hsys', color='green') # Plot system curve
     ax1.set_xlim(-3, 67)
@@ -466,54 +474,83 @@ def find_working_points_all_impeller_sizes(impeller_data: np.ndarray) -> dict: #
 
 # ============= Q3: NPSH_Required and Available for all impeller sizes ===================================
 
-def NPSH_Required(F: float) -> float: 
+def NPSH_Required(F: float) -> float:
     """
-    Calculates the required net positive suction head for a given flow rate. The input Flow Rate must be in [m^3/hr]
+    Calculates the required net positive suction head for a given flow rate
+    using the given correlation. 
     
-    Change units to imput at m3/s instea of m3/hr
-    
+    ----- Units -----
+    Flow rate (input) -> [m^3/s]
+    Flow rate for correlation -> [m^3/hr]
+    NPSH Required (output) -> [m]
     """
-    NPSH_Required = 0.5761 * np.exp(0.0511 * F)
+    F_m3_hr = F * 3600 # [m^3/s] -> [m^3/hr]
+    NPSH_Required_result = 0.5761 * np.exp(0.0511 * F_m3_hr )
     
-    return NPSH_Required
+    return NPSH_Required_result
 
-def NPSH_Available(F): # Calculate NPSH_Available for a given flow rate
-    '''
+def NPSH_Available(F: float) -> float:
+    
+    """
     Calculates the available net positive suction head for a given flow rate. 
     The input Flow Rate must be in [m^3/hr]
     Approximates the head loss before the pump (h_LT_pump) as 25% of the total head loss (h_LT) for the system 
-    (pump is located a quarter way of the system).
-    '''
-    h_LT_pump = 0.25 * find_h_LT(F/3600) #  approximation of h_LT for the system befpre the pump [m^2/s^2] (Flow rate converted  to [m^3/s])
+    (pump is located a quarter of the way of the full pipe length).
+
+    ----- Units -----
+    Flow rate (input) -> [m^3/s]
+    NPSH Available (output) -> [m]
+    """
+
+    h_LT_pump = 0.25 * find_h_LT(F) #  approximation of h_LT for the system before the pump [m^2/s^2] (Flow rate converted  to [m^3/s])
     NPSH_Available = (P_IN - P_VAPOR) / (RHO * g) - Z_PUMP - h_LT_pump / g  # NPSH_Available in [m]
     
     return NPSH_Available
 
-def Check_NPSH_for_all_impeller_sizes(impeller_data): # Check if NPSH_Available is greater than NPSH_Required for all impeller sizes at their working points
+def Check_NPSH_for_all_impeller_sizes(impeller_data: np.ndarray) -> None:
+    
+    """
+    Calculates the NPSH Required for the working points for each size of impeller and prints their values.
+    Also claculates and prints NPSH Available and checks if it's larger than NPSH Required. 
+    If it is, prints all clear message. If not, prints error message (cavitation risk).
+    Uses the working point dictionary from Part C Q2 to find the working points.
+
+    ----- Units -----
+    Flow rate in csv (input) -> [m^3/hr]
+    Head in csv (input) -> [m]
+    NPSH Required (printed output) -> [m]
+    NPSH Available (printed output) -> [m]
+    """
+
     working_points = find_working_points_all_impeller_sizes(impeller_data)
     
     for impeller_size, working_point in working_points.items():
         F_at_working_point = working_point[0].item() # Flow rate at the working point in [m^3/hr]
-        NPSH_req = NPSH_Required(F_at_working_point)
-        NPSH_avail = NPSH_Available(F_at_working_point)
+        NPSH_req = NPSH_Required(F_at_working_point/3600)    #[m^3/hr] -> [m^3/s]
+        NPSH_avail = NPSH_Available(F_at_working_point/3600) #[m^3/hr] -> [m^3/s]
         
-        print(f'For impeller size {impeller_size} inches: \nNPSH Required at the working point is {round(NPSH_req,3)} [m]')
+        print(f' \nNPSH Required at the working point is {NPSH_req:.3f} [m]')
         
         if NPSH_avail > NPSH_req:
-            print(f'The NPSH Available at the working point is {round(NPSH_avail,3)} [m] -> No cavitation risk\n')
+            print(f'For impeller size {impeller_size} inches: the NPSH Available at the working point is {NPSH_avail:.3f} [m] -> No cavitation risk\n')
         else:
-            print(f'The NPSH Available at the working point is {round(NPSH_avail,3)} [m] -> Cavitation risk\n')
+            print(f'For impeller size {impeller_size} inches: the NPSH Available at the working point is {NPSH_avail:.3f} [m] -> Cavitation risk\n')
 
 # ----- Q4: Add Efficiencies to the pump curves for all impeller sizes --------
 
-def import_efficiency_data(): # Import the efficiency data from the CSV file and return a dictionary with impeller sizes as keys and efficiency data as values
-    '''
-    Import the given CSV data of the efficiency, return dictionary with efficiency as keys
-    and (x,y) coordinates as values. The x coordinates are the flow rates in [m^3/s] and the y coordinates are the head losses [m].
-    '''
-    efficiency_data = np.loadtxt('lab1_eff1.csv', delimiter=',', skiprows=2) # Load the efficiency data from the CSV file
+def import_efficiency_data() -> dict: 
     
-    efficiency_list = ['68%', '70%', '71%'] # List of efficiency values corresponding to the columns in the CSV file
+    """
+    Imports the given CSV data of the efficiency, returns dictionary with efficiency precentage as keys
+    and (x: Flow rate[m3/hr] ,y: Head[m]) coordinates as values.
+    """
+
+    from pathlib import Path
+    DATA_DIR = Path(__file__).parent
+    efficiency_data = np.loadtxt(DATA_DIR / 'lab1_eff1.csv', delimiter=',', skiprows=2) # Load the efficiency data from the CSV file
+    
+    efficiency_list = np.loadtxt(DATA_DIR / 'lab1_eff1.csv', delimiter=',', dtype=str, max_rows=1)[1::2]
+    efficiency_list = np.char.add(efficiency_list, '%')
 
     efficiency = {} # Dictionary to store the data for each efficiency curve
     for i, eff in enumerate(efficiency_list):
@@ -524,8 +561,46 @@ def import_efficiency_data(): # Import the efficiency data from the CSV file and
     return efficiency
 
 
+# ================================================
+# ============== Question to hand in =============
+# ================================================
 
-# ----- Checks -----
+"""
+Assuming we cannot change the pump paramters, we will have to modify the system. First, we replace the pipe with a pipe with a larger diameter.
+This decreases the system resistance by decreasing the average flow velocity of the fluid. This 'strectches' and 'flattens' the system curve's
+arch, which results with an interscection (working point) with the pump curve at a higher flow rate, while sacrificing head.
+
+Secondly, we decrease the pressure gradient between out and in of the system by lowering the fluid tank pressure. 
+This results in the lowering of the starting point of the system head curve, which also results in in a higher flow rate for the working point.
+Using these two methods, we can potentially recover the original working point flow rate rate with the 6&7/8" impeller.
+""" 
+
+
+# ------ Checks for PartA ------
+
+def Check_PartA_Q2():
+    graph_F_f_vs_Re(eD, Re_Laminar, Re_Turbulent)
+
+def Check_PartA_Q3():
+    h_LT_value = find_h_LT(F)
+    print(f'Frictional head loss (h_LT) for flow rate F={F:.3f} [m^3/s]: {h_LT_value:.3f} [m^2/s^2]\n')
+
+
+# ----- Checks for PartB -----
+
+def Check_PartB_Q2():
+    print(f'The system Head for flow rate = {F} [m^3/s] is: {find_system_head(F):.3f} [m]\n')
+
+def Check_PartB_Q3():
+    graph_pump_and_system_curves(impeller_data, "6") # Graph for 6 inch impeller
+    working_point = find_working_point(impeller_data, "6") # Check the working point for the 6 inch impeller
+    F_at_working_point, Head_at_working_point = working_point[0].item(), working_point[1].item()
+    print(f'The flow rate at the working point is {F_at_working_point:.3f} [m^3/hr] \nThe head at the working point is {Head_at_working_point:.3f} [m]\n') 
+
+
+
+# ----- Checks for PartC ------
+
 def Check_PartC_Q1():
     graph_all_impeller_sizes(impeller_data)
 
@@ -533,50 +608,19 @@ def Check_PartC_Q2():
     working_points_all_impeller_sizes = find_working_points_all_impeller_sizes(impeller_data)
     
     for impeller_size, working_point in working_points_all_impeller_sizes.items(): # Extract working points from dictionary and print them
-        F_at_working_point, Head_at_working_point = round(working_point[0].item(),3), round(working_point[1].item(),3)
-        print(f'For impeller size {impeller_size} inches: \nThe flow rate at the working point is {F_at_working_point} [m^3/h] \nThe head at the working point is {Head_at_working_point} [m]\n')
+        F_at_working_point, Head_at_working_point = working_point[0].item(), working_point[1].item()
+        print(f'For impeller size {impeller_size} inches: \nThe flow rate at the working point is {F_at_working_point:.3f} [m^3/hr] \nThe head at the working point is {Head_at_working_point:.3f} [m]\n')
 
 def Check_PartC_Q3():
     Check_NPSH_for_all_impeller_sizes(impeller_data)
 
-Check_PartC_Q1(), Check_PartC_Q2(), Check_PartC_Q3()
+"""
+Main Pipline to run the code when opened
+"""
+if __name__ == '__main__':
+    
+    Check_PartA_Q2(), Check_PartA_Q3()
+    Check_PartB_Q2(), Check_PartB_Q3()
+    Check_PartC_Q1(), Check_PartC_Q2(), Check_PartC_Q3()
 
 
-
-
-
-
-# ------ Checks for PartA ------
-def Check_PartA_Q1():
-    Check1_Re, Check1_eD = 1000, 0.03
-    Check2_Re, Check2_eD = 0, 0.001
-    Check3_Re, Check3_eD = 1000, 0.001
-    Check4_Re, Check4_eD = 4000, 0.0007
-    Check5_Re, Check5_eD = 10e6, 0.00003
-    Check6_Re, Check6_eD = 153475, 0.000576
-
-    print(f'ff={round(f_fanning(Check1_Re, Check1_eD),3)}')
-    print(f'ff={round(f_fanning(Check2_Re, Check2_eD),3)}')
-    print(f'ff={round(f_fanning(Check3_Re, Check3_eD),3)}')
-    print(f'ff={round(f_fanning(Check4_Re, Check4_eD),3)}')
-    print(f'ff={round(f_fanning(Check5_Re, Check5_eD),3)}')
-    print(f'ff={round(f_fanning(Check6_Re, Check6_eD),3)}')
-
-def Check_PartA_Q2():
-    graph_F_f_vs_Re(eD, Re_Laminar, Re_Turbulent)
-
-def Check_PartA_Q3():
-    h_LT_value = find_h_LT(F)
-    print(f'Frictional head loss (h_LT) for flow rate F={F:.3f} [m^3/s]: {h_LT_value:.3f} [m^2/s^2]')
-
-Check_PartA_Q1(), Check_PartA_Q2(), Check_PartA_Q3()
-
-# ----- Checks for PartB -----
-
-def Check_PartB():
-    graph_pump_and_system_curves(impeller_data, "6") # Graph for 6 inch impeller
-    working_point = find_working_point(impeller_data, "6") # Check the working point for the 6 inch impeller
-    F_at_working_point, Head_at_working_point = round(working_point[0].item(),3), round(working_point[1].item(),3)
-    print(f'The flow rate at the working point is {F_at_working_point} [m^3/h] \nThe head at the working point is {Head_at_working_point} [m]') 
-
-Check_PartB()
