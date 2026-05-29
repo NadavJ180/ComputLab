@@ -693,13 +693,14 @@ def find_new_parameters(impeller_data: np.ndarray) -> tuple[float, float]:
             P_IN_NEW += incr_P
             D_PIPE_NEW += incr_D
             
-            if P_IN_NEW <= 100:
+            if P_IN_NEW <= P_VAPOR:
                 incr_P = 0
             if D_PIPE_NEW <= 5e-4:
                 incr_D = 0
             
             F_current, _ = find_working_point_modified(impeller_data, '5&11/16')
             F_diff = (F_at_working_point_6_and_7_8 - F_current)
+        
         else:
             P_IN_NEW -= incr_P
             D_PIPE_NEW -= incr_D
@@ -770,7 +771,7 @@ def graph_all_impeller_sizes_modified(impeller_data: np.ndarray) -> None:
     ax1.plot(F_values, H_system_modified, label='Modified ▲Hsys', color='green', linestyle='--') # Plot the modifed system curve
     
     ax1.annotate(f'$\\mathbf{{{'System \\ modification'}}}$\n New Pipe Diameter: {D_PIPE_NEW:.3f} [m]\n New Inlet Pressure: {P_IN_NEW:.3f} [Pa]',
-                 xy=(F_values[0],H_system_modified[0]), xytext=(0,3),
+                 xy=(F_values[0],H_system_modified[0]), xytext=(2,3),
                  fontsize=10, color='black', bbox=dict(
                 boxstyle='round,pad=0.3',    
                 facecolor='lightblue',           
