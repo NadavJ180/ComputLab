@@ -25,7 +25,7 @@ P_VAPOR = 5000 #[Pa]
 g = 9.81 # gravity [m/s^2]
 
 eD = [0.00001, 0.0001, 0.001] # Relative roughness values to be used in the graph
-Re_Laminar = np.geomspace(1e3, 4000, 20) # Reynolds numbers from 10^2 to 4000
+Re_Laminar = np.geomspace(1e3, 4000, 50) # Reynolds numbers from 10^2 to 4000
 Re_Turbulent = np.geomspace(4001, 1e8, 50) # Reynolds numbers from 4000 (not including) to 10^8
 
 
@@ -853,9 +853,9 @@ Main Pipline to run the code when opened
 
 if __name__ == '__main__':
     
-    #Check_PartA_Q2(), Check_PartA_Q3()
-    #Check_PartB_Q2(), Check_PartB_Q3()
-    #Check_PartC_Q1(), Check_PartC_Q2(), Check_PartC_Q3()
+    Check_PartA_Q2(), Check_PartA_Q3()
+    Check_PartB_Q2(), Check_PartB_Q3()
+    Check_PartC_Q1(), Check_PartC_Q2(), Check_PartC_Q3()
     Check_Open_Q()
 
 
