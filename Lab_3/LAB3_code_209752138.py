@@ -1,13 +1,11 @@
 import numpy
-from scipy import special
+from scipy import special, optimize
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 import numpy as np
 import math as math
 from scipy.integrate import solve_ivp
-
-#from scipy import special, optimize
-#import pandas as pd
+import pandas as pd
 
 # TEST 3 part A
 L_COL = 100  # m
@@ -34,17 +32,17 @@ KCA = 0.066
 TF2 = 50
 
 # ---------- Further Variables – Part A ----------
-EPS     = 0.37       # Bed void fraction                      [-]
-A_COL   = 0.3        # Column cross-sectional area            [m2]
-C0_COL  = 0.72       # Column inlet concentration             [mol/m3]
-K_HA    = 5.2e-3     # Henry equilibrium constant (column)    [-]
+EPS     = 0.37       # Bed void fraction                             [-]
+A_COL   = 0.3        # Column cross-sectional area                   [m2]
+C0_COL  = 0.72       # Column inlet concentration                    [mol/m3]
+K_EQ    = 5.2e-3     # Equilibrium constant (column)                 [-]
 N_STEPS = 1000       # Discretisation points for all plots
-Z_START = 0.001      # Minimum z (avoids log/sqrt(0) at z=0) [m]
-T_REQ   = 9.42       # Requested evaluation time, Task 1      [h]
-Z_REQ   = 37.37      # Requested evaluation position, Task 1  [m]
+Z_OR_T_START = 0.001 # Minimum z or t                                [m]
+T_REQ   = 9.42       # Requested evaluation time, Part A Task 1      [h]
+Z_REQ   = 37.37      # Requested evaluation position, Part A Task 1  [m]
 
 # ---------- Further Variables – Part A2 Bonus ----------
-C2_BONUS = 1.0       # Second-phase inlet concentration       [mol/m3]
+C2_BONUS = 1.0       # Second-phase inlet concentration              [mol/m3]
 
 # Derived interstitial (pore) velocity
 u_col = Q_IN / (A_COL * EPS)   # [m/h]
@@ -56,30 +54,22 @@ u_col = Q_IN / (A_COL * EPS)   # [m/h]
 
 def t_R(z):
     """
-    Retardation time tR at axial position z (Henry isotherm).
-
-    tR = (z / u) * (1 + (1-eps)/eps * K)
-
-    Physically: the adsorption front travels at u_front = u / (1+(1-eps)/eps*K),
-    so it arrives at position z after time tR.
+    Calculates the retardation time (tR) at axial position z. 
+    Can calculate for a specific or an array of values.
 
     Parameters:
-        z (float | ndarray): axial position(s) [m]
+        z (float | ndarray): axial position/s [m]
     Returns:
-        float | ndarray: retardation time(s) [h]
+        float | ndarray: retardation time/s [h]
     """
-    return (z / u_col) * (1.0 + (1.0 - EPS) / EPS * K_HA)
+    return (z / u_col) * (1.0 + (1.0 - EPS) / EPS * K_EQ)
 
 
 def C_col(t, z, C0=C0_COL):
     """
-    Analytical erf concentration profile – dispersion model (Henry isotherm).
-
-    C(t, z) = 0.5 * C0 * (1 + erf( (t - tR) / (2*tR*sqrt(DL/(z*u))) ))
-
-    The denominator 2*tR*sqrt(DL/(z*u)) is the dispersion-broadened width σ
-    in time units; it grows as sqrt(z) (Gaussian spread of the front).
-
+    Analytical concentration profile using erf function.
+    Can calculate for a specific or an array of values.
+    
     Parameters:
         t  (float | ndarray): time [h]
         z  (float | ndarray): position [m]
@@ -88,24 +78,21 @@ def C_col(t, z, C0=C0_COL):
         float | ndarray: concentration [mol/m3]
     """
     tR    = t_R(z)
-    sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))   # dispersion width [h]
+    sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))   
+
     return 0.5 * C0 * (1.0 + special.erf((t - tR) / sigma))
 
 
-def t_breakthrough(z, ratio=0.01):
+def t_breakthrough(z, ratio):
     """
-    Invert the erf solution to find the time when C(t, z) / C0 = ratio.
-
-    t_B = tR + 2*tR*sqrt(DL/(z*u)) * erfinv(2*ratio - 1)
-
-    For ratio < 0.5 → erfinv returns a negative value → t_B < tR  (early detection).
-    For ratio = 0.01 (1%) → t_B is the breakthrough time.
+    Calculates the breakout time at the given ratio from the original column concentration (ratio = C/C0).
+    Uses the invert of the erf (erf^-1 = erfinv).
 
     Parameters:
         z     (float): axial position [m]
         ratio (float): C/C0 threshold (e.g. 0.01 for 1%, 0.9999 for saturation)
     Returns:
-        float: breakthrough / saturation time [h]
+        float: breakthrough time [h]
     """
     tR    = t_R(z)
     sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))
@@ -296,41 +283,41 @@ if __name__ == "__main__":
     # ==========================================================
 
     # ----------------------------------------------------------
-    # Task 1: Concentration at a specific (t, z) point
+    # Task 1: Concentration at a specific point
     # ----------------------------------------------------------
     C_req = C_col(T_REQ, Z_REQ)
     print(f"[Part A | Task 1]  C(t={T_REQ} h, z={Z_REQ} m) = {C_req:.3f} mol/m3")
-
+    
     # ----------------------------------------------------------
-    # Task 2: C vs Time – 10 profiles at 10 % column-length steps
+    # Task 2: C vs Time – 10 % column-length steps
     # ----------------------------------------------------------
-    z_vals = np.linspace(L_COL / 10, L_COL, 10)   # z = 10%, 20%, …, 100% of L
-    t_arr  = np.linspace(Z_START, TF, N_STEPS)
+    z_vals = np.linspace(L_COL / 10, L_COL, 10)   # z = 10%, 20%, ... 100% of L
+    t_vals  = np.linspace(Z_OR_T_START, TF, N_STEPS)
 
     fig, ax = plt.subplots(figsize=(9, 5))
     for z_val in z_vals:
-        ax.plot(t_arr, C_col(t_arr, z_val), label=f"z={z_val:.1f} m")
+        ax.plot(t_vals, C_col(t_vals, z_val), label=f"z={z_val:.1f} m")
     ax.set_xlabel("Time [hours]")
     ax.set_ylabel("Concentration [mol/m3]")
-    ax.set_title("Test 3 – Concentration vs Time")
-    ax.legend(fontsize=7, loc="center left", bbox_to_anchor=(1, 0.5))
+    ax.set_title("Concentration vs Time")
+    ax.legend()
     ax.grid(True)
     plt.tight_layout()
     plt.show()
 
     # ----------------------------------------------------------
-    # Task 3: C vs Position – 10 snapshots at 10 % TF steps
+    # Task 3: C vs Position – 10 % TF steps
     # ----------------------------------------------------------
-    t_vals = np.linspace(TF / 10, TF, 10)          # t = 10%, 20%, …, 100% of TF
-    z_arr  = np.linspace(Z_START, L_COL, N_STEPS)
+    t_vals = np.linspace(TF / 10, TF, 10)          # t = 10%, 20%, ... 100% of Total Run Time
+    z_vals  = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
 
     fig, ax = plt.subplots(figsize=(9, 5))
     for t_val in t_vals:
-        ax.plot(z_arr, C_col(t_val, z_arr), label=f"t={t_val:.1f} hours")
+        ax.plot(z_vals, C_col(t_val, z_vals), label=f"t={t_val:.1f} hours")
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Concentration [mol/m3]")
-    ax.set_title("Test 3 – Concentration vs Position")
-    ax.legend(fontsize=7, loc="center left", bbox_to_anchor=(1, 0.5))
+    ax.set_title("Concentration vs Position")
+    ax.legend()
     ax.grid(True)
     plt.tight_layout()
     plt.show()
@@ -339,8 +326,8 @@ if __name__ == "__main__":
     # Task 4: Breakthrough time (C/C0 = 1 %) at column exit
     # ----------------------------------------------------------
     t_BT = t_breakthrough(L_COL, ratio=0.01)
-    print(f"[Part A | Task 4]  Breakthrough time (C/C0=1%) at z=L: t_BT = {t_BT:.3f} h")
-
+    print(f"[Part A | Task 4]  Breakthrough time for C/C0=1% at z=L: {t_BT:.3f} h")
+    
     # ==========================================================
     #  BONUS – Part A2: Used Column
     # ==========================================================
@@ -546,3 +533,4 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     plt.show()
+    
