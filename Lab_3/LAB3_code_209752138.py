@@ -1,5 +1,5 @@
 import numpy
-from scipy import special, optimize
+from scipy import special
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,7 +77,7 @@ def C_col(t, z, C0=C0_COL):
     Returns:
         float | ndarray: concentration [mol/m3]
     """
-    tR    = t_R(z)
+    tR    = t_R(z)                                      # Retardation time at z
     sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))   
 
     return 0.5 * C0 * (1.0 + special.erf((t - tR) / sigma))
@@ -95,7 +95,7 @@ def t_breakthrough(z, ratio):
     Returns:
         float: breakthrough time [h]
     """
-    tR    = t_R(z)
+    tR    = t_R(z)                                      # Retardation time at z
     sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))
     return tR + sigma * special.erfinv(2.0 * ratio - 1.0)
 
@@ -113,7 +113,7 @@ def t_saturation():
 
 # -------------------- Q2 + Q3: C vs Time, Position at z = Z2, t = T2 --------------------
 
-def C_used_col(t_arr, z, C1=C0_COL, C2=C2_BONUS, t_sat=None):
+def C_used_col(t_arr, z, C1=C0_COL, C2=C2_BONUS):
     """
     Concentration at point z versus absolute time, for a two-phase process:
       Phase 1 (t <= t_sat) : C1 flows through a fresh column.
@@ -132,88 +132,128 @@ def C_used_col(t_arr, z, C1=C0_COL, C2=C2_BONUS, t_sat=None):
     Returns:
         ndarray: concentration [mol/m3]
     """
-    if t_sat is None:
-        t_sat = t_saturation()              
+    
+    t_sat = t_saturation()                                                      # Saturation time for 99.99% C0
     t_arr = np.asarray(t_arr, dtype=float)                                      # Makes sure this is np array
-    tR    = t_R(z)
+    tR    = t_R(z)                                                              # Retardation time at z
     sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))
 
     C_phase1 = 0.5 * C1 * (1.0 + special.erf((t_arr - tR) / sigma))             # C1 flowing - standard erf breakthrough at z
     tau      = t_arr - t_sat                                                    # Time elapsed since C2 injection
     C_phase2 = C1 + (C2 - C1) * 0.5 * (1.0 + special.erf((tau - tR) / sigma))   # C2 flowing - shifted erf  
 
-    return np.where(t_arr <= t_sat, C_phase1, C_phase2)                         # similar to if-else, returns new array of the combined concetnrations
+    return np.where(t_arr <= t_sat, C_phase1, C_phase2)                         # Similar to if-else, returns new array of the combined concetnrations
 
 
 # ==================== PART B - Batch Adsorption: Isotherm Functions ====================
 
-def isotherm_henry(C, K):
-    """
-    Henry (linear) isotherm.
+# -------------------- Q1: Read CSV, find q_m & K --------------------
 
-    q = K * C
+def import_CSV(Test_Num=None, q_inv_col=None):
+    """
+    Imports the CSV for the specified test of the linearized Langmuir isotherm (Linweaver-Burk)
+    
+    1/q = 1/(C*q_m*K) + 1/q_m 
+
+    We import without row 0 (contains titles). If the test number is not supplied, asks for manual input of test number.
+
+    Parameters:
+        Test_Num (int): the test number we are currently running
+    Returns:
+        inv_C (ndarray): inverted concentration of the relevant test [L/g]
+        inv_q (ndarray): inverted final content in adsorbant [g/g] 
+    """
+    if Test_Num is None:
+        Test_Num = int(input("Input relevant test number (1 / 2 / 3): "))
+    
+
+    df = pd.read_csv("synthetic_data_models.csv") 
+    col_num_dict = {1: 1, 2: 3}
+    inv_C  = df[f"Test {Test_Num}"].iloc[1:].astype(float).values           # Skip row 0, contains titles
+    inv_q  = df[f"Unnamed: {2*Test_Num-1}"].iloc[1:].astype(float).values   # Imports the row that corresponds to the test number
+
+    return inv_C, inv_q
+
+# -------------------- Q2: Functions for Henry, Langmuir and Freundlich (n>1 + n<1) adsorption models --------------------
+
+def henry_isotherm(C, K):
+    """
+    Function for the Henry isotherm.
 
     Parameters:
         C (float | ndarray): liquid concentration [g/L]
         K (float): Henry constant [L/g]
     Returns:
-        float | ndarray: solid loading q [g/g]
+        q (float | ndarray): final content in adsorbant [g/g]
     """
-    return K * C
+    q = K * C
 
+    return q
 
-def isotherm_langmuir(C, qm, K):
+def langmuir_isotherm(C, qm, K):
     """
-    Langmuir isotherm – monolayer adsorption with finite capacity.
-
-    q = qm * K*C / (1 + K*C)
+    Function for the Langmuir isotherm.
 
     Parameters:
         C  (float | ndarray): liquid concentration [g/L]
-        qm (float): maximum solid loading [g/g]
+        qm (float): maximum content in adsorbant [g/g]
         K  (float): equilibrium (affinity) constant [L/g]
     Returns:
-        float | ndarray: solid loading q [g/g]
+        q (float | ndarray): final content in adsorbant [g/g]
     """
-    return qm * K * C / (1.0 + K * C)
+    q = qm * K * C / (1.0 + K * C)
 
+    return q 
 
-def isotherm_freundlich(C, K, n):
+def freundlich_isotherm(C, K, n):
     """
-    Freundlich isotherm – empirical power-law model.
-
-    q = K * C^n
-
-    n > 1 : unfavourable (convex isotherm, broadening front)
-    n < 1 : favourable  (concave isotherm, sharpening front)
+    Function for the Freundlich isotherm.
 
     Parameters:
         C (float | ndarray): liquid concentration [g/L]
         K (float): Freundlich constant [L/g]
         n (float): Freundlich exponent [-]
     Returns:
-        float | ndarray: solid loading q [g/g]
+        q (float | ndarray): final content in adsorbant [g/g]
     """
-    return K * C ** n
+    C_safe = np.maximum(C, 0.0)         # Avoids unphyical concetrations (negetive values) in the numerical solutions
+    q = K * C_safe ** n
 
+    return q
+
+# -------------------- Q3-4: q vs C in all models + their maximum retentions --------------------
 
 def operation_line(C, C0=C0_PT2, q0=0.0):
     """
-    Mass-balance (operation) line for a batch stirred-tank adsorber.
-
-    q = q0 + (VL/W) * (C0 - C)
-
-    Derived from  C0*VL + q0*W = C*VL + q*W  (total-mass balance).
-
+    Operation line used to find the maximal recovery when equilibrim is reached.
+    
     Parameters:
         C  (float | ndarray): liquid concentration [g/L]
         C0 (float): initial liquid concentration [g/L]
-        q0 (float): initial solid loading [g/g]
+        q0 (float): initial content in adsorbant [g/g]
     Returns:
-        float | ndarray: solid loading q [g/g]
+        q (float | ndarray): final content in the adsorbant (at a specific liquid concetration) [g/g]
     """
-    return q0 + (VL / W) * (C0 - C)
+    q = q0 + (VL / W) * (C0 - C)
 
+    return q
+
+def isotherm_residual(C, func, model_args):
+    """
+    Calculates the residual between the equilibrium isotherm and the operation line. 
+    Used as input for fsolve to find the intersection between them.
+
+    Parameters:
+        C  (float | ndarray): liquid concentration [g/L]
+        func (function): one of the isotherms (henry/langmuir/freundlich) [g/L]
+        model_args (tuple): further arguments for the model equation (q_m / K / n)
+
+    Returns:
+        Res (float): Residual between isotherm and operation line
+    """
+    Res = func(C, *model_args) - operation_line(C)
+    
+    return Res 
 
 # ==================== PART C - Continuous Stirred-Tank ODE System ====================
 
@@ -375,71 +415,68 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # ==================== PART B – Batch Adsorption in a Stirred Tank ====================
+    # ==================== PART B - Batch Adsorption in a Stirred Tank ====================
 
-    # ----------------------------------------------------------
-    # -------------------- Task 1: Read CSV – Langmuir data in Lineweaver-Burk form --------------------
-    #         1/q = (1/(qm*K)) * (1/C) + 1/qm
-    # ----------------------------------------------------------
-    df     = pd.read_csv("synthetic_data_models.csv")
-    # Row 0 in the data contains the sub-headers '1/C' / '1/q' → skip it
-    inv_C  = df["Test 3"].iloc[1:].astype(float).values
-    inv_q  = df["Unnamed: 5"].iloc[1:].astype(float).values
+    # -------------------- Q1: Read CSV, find q_m & K --------------------
+    
+    VL_dict = {50: 1, 122: 2, 100: 3}     # Dictionary of which solution volume corresponds to which test number
+    Test_Num = VL_dict.get(VL, None)      # Finds the test number using the solution volume, if not one of the OG tests, returns None
+    inv_C, inv_q = import_CSV(Test_Num)
 
-    # Linear regression: slope = 1/(qm*K),  intercept = 1/qm
-    slope_lw, intercept_lw = np.polyfit(inv_C, inv_q, 1)
-    qm_fit = 1.0 / intercept_lw            # max adsorption capacity [g/g]
-    K_fit  = intercept_lw / slope_lw       # equilibrium constant     [L/g]
-    print(f"\n[Part B | Task 1]  Langmuir fit (unrounded): qm = {qm_fit:.4f} g/g, "
-          f"K = {K_fit:.4f} L/g")
+    slope, intercept = np.polyfit(inv_C, inv_q, 1)                  # Linear regression for Linweaver Berk
+    
+    q_m = 1.0 / intercept                                           # max adsorption capacity [g/g]
+    K = intercept / slope                                           # equilibrium constant [L/g]        K = (1/qm) / (1/qm*K) 
 
-    # Round to 2 decimal places for use in isotherm models
-    qm = round(qm_fit, 2)
-    K  = round(K_fit,  2)
-    print(f"[Part B | Task 1]  Langmuir constants (rounded to 2 d.p.): "
-          f"qm = {qm} g/g,  K = {K} L/g")
+    print(f"\n[Part B | Q1] Linear Langmuir constants (unrounded): qm = {q_m} [g/g], "
+          f"K = {K} [L/g]")
+    
+    q_m_round = round(q_m, 2)                                 
+    K_round  = round(K, 2)                                
+    
 
-    # -------------------- Tasks 2–4: Build isotherms, plot, find intersections --------------------
-    # All four models share the same K (and qm for Langmuir),
-    # rounded from the Lineweaver-Burk fit above.
-    C_plot = np.linspace(0.0, C0_PT2, N_STEPS)   # concentration axis for plot
+    # -------------------- Q3-4: q vs C in all models + their maximum recovery --------------------
 
-    q_op   = operation_line(C_plot)
-    q_hen  = isotherm_henry(C_plot, K)
-    q_lang = isotherm_langmuir(C_plot, qm, K)
-    q_fr1  = isotherm_freundlich(C_plot, K, n1)
-    q_fr2  = isotherm_freundlich(C_plot, K, n2)
+    C_vals = np.linspace(0.0, C0_PT2, N_STEPS)   # concentration values for plot
+
+    q_op   = operation_line(C_vals)
+    q_hen  = henry_isotherm(C_vals, K_round)
+    q_lang = langmuir_isotherm(C_vals, q_m_round, K_round)
+    q_fr1  = freundlich_isotherm(C_vals, K_round, n1)
+    q_fr2  = freundlich_isotherm(C_vals, K_round, n2)
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.plot(C_plot, q_op,   label="Operation line",                           color="blue")
-    ax.plot(C_plot, q_hen,  label="Equilibrium line (Henry's law)",           color="orange")
-    ax.plot(C_plot, q_lang, label="Equilibrium line (Langmuir model)",        color="green")
-    ax.plot(C_plot, q_fr1,  label=f"Equilibrium line (Freundlich model) n={n1}", color="red")
-    ax.plot(C_plot, q_fr2,  label=f"Equilibrium line (Freundlich model) n={n2}", color="purple")
+    ax.plot(C_vals, q_op,   label="Operation line", color="blue")
+    ax.plot(C_vals, q_hen,  label="Equilibrium line (Henry's law)", color="orange")
+    ax.plot(C_vals, q_lang, label="Equilibrium line (Langmuir model)", color="green")
+    ax.plot(C_vals, q_fr1,  label=f"Equilibrium line (Freundlich model) n={n1}", color="red")
+    ax.plot(C_vals, q_fr2,  label=f"Equilibrium line (Freundlich model) n={n2}", color="purple")
 
-    # Four models with their functions (for intersection search)
-    isotherms_b = {
-        "Henry":               lambda C: isotherm_henry(C, K),
-        "Langmuir":            lambda C: isotherm_langmuir(C, qm, K),
-        f"Freundlich n={n1}":  lambda C: isotherm_freundlich(C, K, n1),
-        f"Freundlich n={n2}":  lambda C: isotherm_freundlich(C, K, n2),
+    # Dictionary for the model functions and their arguments
+    isotherms = {
+        "Henry": (henry_isotherm, (K_round,)),
+        "Langmuir": (langmuir_isotherm, (q_m_round, K_round)),
+        f"Freundlich n={n1}": (freundlich_isotherm, (K_round, n1)),
+        f"Freundlich n={n2}": (freundlich_isotherm, (K_round, n2)),
     }
 
-    print("\n[Part B | Task 4]  Equilibrium intersections (max recovery):")
-    for name, iso_func in isotherms_b.items():
-        # Solve iso(C) = operation_line(C) in the interval (0, C0)
-        def residual(C, f=iso_func):
-            return f(C) - operation_line(C)
-
-        C_eq = optimize.brentq(residual, 1e-9, C0_PT2 - 1e-9)
+    print("\n[Part B | Q4]  Equilibrium intersections (max recovery):")
+    
+    for name, (func, model_args) in isotherms.items():
+        initial_guess = C0_PT2 / 2                  # Initial guess in middle of operating range
+        
+        C_eq_arr = fsolve(isotherm_residual, initial_guess, args=(func, model_args))        #finds intersection point
+        C_eq = C_eq_arr[0]                          # Turns the array output of fsolve into a float
+        
         q_eq = operation_line(C_eq)
-        print(f"  {name:28s}  C_eq = {C_eq:.5f} g/L,  q_eq = {q_eq:.5f} g/g")
-        ax.scatter(C_eq, q_eq, color="black", zorder=5, s=50)   # mark on plot
+
+        print(f"{name}:         C_eq = {C_eq:.5f} [g/L],  q_eq = {q_eq:.5f} [g/g]")
+        ax.scatter(C_eq, q_eq, color="black", zorder=5)   # Plot the intersetion points on the plot
 
     ax.set_xlabel("C (g/L)")
     ax.set_ylabel("q (g/g)")
-    ax.set_title("Test 3 – Batch adsorption in a stirred tank")
-    ax.legend(fontsize=8)
+    ax.set_title("Batch adsorption in a stirred tank")
+    ax.legend()
     ax.grid(True)
     plt.tight_layout()
     plt.show()
@@ -451,14 +488,14 @@ if __name__ == "__main__":
 
     # Inverse isotherms C* = f^{-1}(q) – needed by the ODE solid balance
     inv_iso_funcs = {
-        "Henry":               lambda q: q / K,
-        "Langmuir":            lambda q: q / (K * (qm - q)),     # C*=q/(K*(qm-q))
-        f"Freundlich n={n1}":  lambda q: (q / K) ** (1.0 / n1),
-        f"Freundlich n={n2}":  lambda q: (q / K) ** (1.0 / n2),
+        "Henry":               lambda q: q / K_round,
+        "Langmuir":            lambda q: q / (K_round * (q_m_round - q)),     # C*=q/(K*(qm-q))
+        f"Freundlich n={n1}":  lambda q: (q / K_round) ** (1.0 / n1),
+        f"Freundlich n={n2}":  lambda q: (q / K_round) ** (1.0 / n2),
     }
 
     # 25 % of Langmuir qm is the target solid loading
-    q_target = 0.25 * qm
+    q_target = 0.25 * q_m_round
     print(f"\n[Part C | Task 3]  Target: 25% of qm = {q_target} g/g")
 
     fig_c, axes_c = plt.subplots(1, 2, figsize=(13, 5))
