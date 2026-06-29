@@ -31,7 +31,7 @@ VS = 2
 KCA = 0.066
 TF2 = 50
 
-# ---------- Further Variables – Part A ----------
+# ---------- Further Variables - Part A ----------
 EPS     = 0.37       # Bed void fraction                             [-]
 A_COL   = 0.3        # Column cross-sectional area                   [m2]
 C0_COL  = 0.72       # Column inlet concentration                    [mol/m3]
@@ -41,16 +41,16 @@ Z_OR_T_START = 0.001 # Minimum z or t                                [m]
 T_REQ   = 9.42       # Requested evaluation time, Part A Task 1      [h]
 Z_REQ   = 37.37      # Requested evaluation position, Part A Task 1  [m]
 
-# ---------- Further Variables – Part A2 Bonus ----------
+# ---------- Further Variables - Part A2 Bonus ----------
 C2_BONUS = 1.0       # Second-phase inlet concentration              [mol/m3]
 
 # Derived interstitial (pore) velocity
 u_col = Q_IN / (A_COL * EPS)   # [m/h]
 
 
-# ==============================================================
-#  PART A – Column Adsorption Functions
-# ==============================================================
+# ==================== Part A - Column Adsorption Functions ============================
+
+# -------------------- Q1: Find concentration at a specific point --------------------
 
 def t_R(z):
     """
@@ -82,6 +82,7 @@ def C_col(t, z, C0=C0_COL):
 
     return 0.5 * C0 * (1.0 + special.erf((t - tR) / sigma))
 
+# -------------------- Q4: Breakthrough time (C/C0 = 1%) --------------------
 
 def t_breakthrough(z, ratio):
     """
@@ -99,58 +100,52 @@ def t_breakthrough(z, ratio):
     return tR + sigma * special.erfinv(2.0 * ratio - 1.0)
 
 
-# ==============================================================
-#  BONUS – Part A2: Used-Column Functions
-# ==============================================================
+# ==================== BONUS - Part A2: Used-Column Functions ====================
+
+# -------------------- Q1: Saturation time --------------------
 
 def t_saturation():
     """
-    Time when the column exit reaches 99.99 % of C0 (column considered 'full').
-    Uses t_breakthrough with ratio = 0.9999.
+    Time when the column exit reaches 99.99 % of C0.
+    Uses t_breakthrough from part A with ratio = 0.9999.
     """
     return t_breakthrough(L_COL, ratio=0.9999)
 
+# -------------------- Q2 + Q3: C vs Time, Position at z = Z2, t = T2 --------------------
 
 def C_used_col(t_arr, z, C1=C0_COL, C2=C2_BONUS, t_sat=None):
     """
-    Concentration at position z versus absolute time, for a two-phase process:
-      Phase 1 (t ≤ t_sat) : C1 flows through a fresh column.
-      Phase 2 (t  > t_sat): C2 injected into the C1-saturated column.
+    Concentration at point z versus absolute time, for a two-phase process:
+      Phase 1 (t <= t_sat) : C1 flows through a fresh column.
+      Phase 2 (t  > t_sat): C2 is injected into the C1-saturated column.
 
-    For a linear (Henry) isotherm the concentration increment (C2-C1) propagates
-    with the same retardation tR as C1 on a fresh column, so the phase-2 front
-    is simply an erf shifted by t_sat:
-
-        C_used = C1 + (C2-C1) * 0.5 * (1 + erf((tau - tR) / sigma))
-    where tau = t - t_sat.
+    Since we are using a similar approximation to part A using the erf, we are 
+    essentially shifting the erf by C2-C1, with C0 = C1 and the time in the erf is
+    the shifted time from time of new injection (for phase 2).
 
     Parameters:
         t_arr (ndarray): absolute time vector [h]
-        z     (float): observation position [m]
+        z     (float): position [m]
         C1    (float): first-phase concentration [mol/m3]
         C2    (float): second-phase concentration [mol/m3]
-        t_sat (float): column saturation time [h] (computed if None)
+        t_sat (float): column saturation time [h] 
     Returns:
         ndarray: concentration [mol/m3]
     """
     if t_sat is None:
-        t_sat = t_saturation()
-    t_arr = np.asarray(t_arr, dtype=float)
+        t_sat = t_saturation()              
+    t_arr = np.asarray(t_arr, dtype=float)                                      # Makes sure this is np array
     tR    = t_R(z)
     sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))
 
-    # Phase 1: C1 flowing – standard erf breakthrough at z
-    C_phase1 = 0.5 * C1 * (1.0 + special.erf((t_arr - tR) / sigma))
-    # Phase 2: tau = time elapsed since C2 injection started
-    tau      = t_arr - t_sat
-    C_phase2 = C1 + (C2 - C1) * 0.5 * (1.0 + special.erf((tau - tR) / sigma))
+    C_phase1 = 0.5 * C1 * (1.0 + special.erf((t_arr - tR) / sigma))             # C1 flowing - standard erf breakthrough at z
+    tau      = t_arr - t_sat                                                    # Time elapsed since C2 injection
+    C_phase2 = C1 + (C2 - C1) * 0.5 * (1.0 + special.erf((tau - tR) / sigma))   # C2 flowing - shifted erf  
 
-    return np.where(t_arr <= t_sat, C_phase1, C_phase2)
+    return np.where(t_arr <= t_sat, C_phase1, C_phase2)                         # similar to if-else, returns new array of the combined concetnrations
 
 
-# ==============================================================
-#  PART B – Batch Adsorption: Isotherm Functions
-# ==============================================================
+# ==================== PART B - Batch Adsorption: Isotherm Functions ====================
 
 def isotherm_henry(C, K):
     """
@@ -220,9 +215,8 @@ def operation_line(C, C0=C0_PT2, q0=0.0):
     return q0 + (VL / W) * (C0 - C)
 
 
-# ==============================================================
-#  PART C – Continuous Stirred-Tank ODE System
-# ==============================================================
+# ==================== PART C - Continuous Stirred-Tank ODE System ====================
+
 
 def make_ode_rhs(iso_inv_func):
     """
@@ -273,31 +267,27 @@ def linear_interp_crossing(t_arr, q_arr, q_target):
 
 
 # ==============================================================
-#  MAIN PIPELINE
+# ===================== MAIN PIPELINE ==========================
 # ==============================================================
 
 if __name__ == "__main__":
 
-    # ==========================================================
-    #  PART A – Column Adsorption
-    # ==========================================================
+    # ==================== PART A - Column Adsorption ====================
 
-    # ----------------------------------------------------------
-    # Task 1: Concentration at a specific point
-    # ----------------------------------------------------------
+    # -------------------- Q1: Find concentration at a specific point --------------------
     C_req = C_col(T_REQ, Z_REQ)
-    print(f"[Part A | Task 1]  C(t={T_REQ} h, z={Z_REQ} m) = {C_req:.3f} mol/m3")
+    print(f"[Part A | Q1]  C(t={T_REQ} [h], z={Z_REQ} [m]) = {C_req:.3f} [mol/m3]")
     
-    # ----------------------------------------------------------
-    # Task 2: C vs Time – 10 % column-length steps
-    # ----------------------------------------------------------
-    z_vals = np.linspace(L_COL / 10, L_COL, 10)   # z = 10%, 20%, ... 100% of L
+    # -------------------- Q2: C vs Time - 10 % column-length steps --------------------
+
+    z_vals = np.linspace(L_COL / 10, L_COL, 10)   # z jumps of 10%
     t_vals  = np.linspace(Z_OR_T_START, TF, N_STEPS)
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    for z_val in z_vals:
-        ax.plot(t_vals, C_col(t_vals, z_val), label=f"z={z_val:.1f} m")
+    for z_val in z_vals:                                                    # Plot a curve for each position increment
+        ax.plot(t_vals, C_col(t_vals, z_val), label=f"z={z_val:.1f} [m]")
     ax.set_xlabel("Time [hours]")
+    
     ax.set_ylabel("Concentration [mol/m3]")
     ax.set_title("Concentration vs Time")
     ax.legend()
@@ -305,15 +295,16 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # ----------------------------------------------------------
-    # Task 3: C vs Position – 10 % TF steps
-    # ----------------------------------------------------------
-    t_vals = np.linspace(TF / 10, TF, 10)          # t = 10%, 20%, ... 100% of Total Run Time
+    
+    # -------------------- Q3: C vs Position - 10 % TF steps --------------------
+
+    t_vals = np.linspace(TF / 10, TF, 10)          # t jumps of 10%
     z_vals  = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    for t_val in t_vals:
+    for t_val in t_vals:                                                        # Plot a curve for each time increment
         ax.plot(z_vals, C_col(t_val, z_vals), label=f"t={t_val:.1f} hours")
+    
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Concentration [mol/m3]")
     ax.set_title("Concentration vs Position")
@@ -322,80 +313,72 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # ----------------------------------------------------------
-    # Task 4: Breakthrough time (C/C0 = 1 %) at column exit
-    # ----------------------------------------------------------
-    t_BT = t_breakthrough(L_COL, ratio=0.01)
-    print(f"[Part A | Task 4]  Breakthrough time for C/C0=1% at z=L: {t_BT:.3f} h")
     
-    # ==========================================================
-    #  BONUS – Part A2: Used Column
-    # ==========================================================
+    # -------------------- Q4: Breakthrough time (C/C0 = 1%) --------------------
+    
+    t_BT = t_breakthrough(L_COL, ratio=0.01)
+    print(f"[Part A | Q4]  Breakthrough time for C/C0=1% at z=L: {t_BT:.3f} [h]")
+    
 
-    # Task 1: Saturation time (column exit = 99.99 % of C0)
-    t_sat      = t_saturation()
+    # ==================== BONUS - Part A2: Used Column ====================
+
+    # -------------------- Q1: Saturation time --------------------
+    t_sat      = t_saturation()                                                 # Time for exit concentration to br 99.99% C0
     t_sat_ceil = math.ceil(t_sat)
-    print(f"\n[Bonus  | Task 1]  Saturation time (99.99 % of C0): {t_sat:.5f} h")
-    print(f"[Bonus  | Task 1]  Rounded-up saturation time      : {t_sat_ceil} h")
+    print(f"\n[Bonus  | Q1]  Saturation time (99.99 % of C0): {t_sat:.5f} [h]")
+    print(f"[Bonus  | Q1]  Rounded-up saturation time      : {t_sat_ceil} [h]")
 
-    # ----------------------------------------------------------
-    # Task 2: C vs Time at z = Z2 (3 curves, axis = 2*ceil(t_sat))
-    # ----------------------------------------------------------
-    t_max   = 2 * t_sat_ceil
-    t_b_arr = np.linspace(0.001, t_max, N_STEPS)
-    tR_Z2   = t_R(Z2)
-    sig_Z2  = 2.0 * tR_Z2 * np.sqrt(D_L / (Z2 * u_col))
 
-    # Curves 1 & 2: fresh-column breakthroughs (C1 and C2)
-    C1_vs_t = 0.5 * C0_COL   * (1.0 + special.erf((t_b_arr - tR_Z2) / sig_Z2))
-    C2_vs_t = 0.5 * C2_BONUS * (1.0 + special.erf((t_b_arr - tR_Z2) / sig_Z2))
-    # Curve 3: C2 on the C1-saturated column
-    Cu_vs_t = C_used_col(t_b_arr, Z2, C0_COL, C2_BONUS, t_sat)
+    # -------------------- Q2: C vs Time at z = Z2 --------------------
+
+    t_max   = 2 * t_sat_ceil                            
+    t_vals = np.linspace(Z_OR_T_START, t_max, N_STEPS)       
+
+    C1_vs_t = C_col(t_vals, Z2, C0_COL)                              # Entrance concentration of C0
+    C2_vs_t = C_col(t_vals, Z2, C2_BONUS)                            # Entrrance concentration of C2
+    C_used_vs_t = C_used_col(t_vals, Z2, C0_COL, C2_BONUS)           # Entrance concentration C2 on used column
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(t_b_arr, C1_vs_t, label=f"z={Z2}.0 [m] C1 on fresh column")
-    ax.plot(t_b_arr, C2_vs_t, label=f"z={Z2}.0 [m] C2 on fresh column")
-    ax.plot(t_b_arr, Cu_vs_t, label=f"z={Z2}.0 [m] C2 on used column")
+    ax.plot(t_vals, C1_vs_t, label=f"z={Z2:.1f} [m] C1 on fresh column")
+    ax.plot(t_vals, C2_vs_t, label=f"z={Z2:.1f} [m] C2 on fresh column")
+    ax.plot(t_vals, C_used_vs_t, label=f"z={Z2:.1f} [m] C2 on used column")
+    
+    ax.axvspan(0, t_sat_ceil, color='gold', alpha=0.15)                     # color background up to t_sat
+    ax.axvspan(t_sat_ceil, t_vals[-1], color='gray', alpha=0.15)            # color background from t_sat
     ax.set_xlabel("Time [hours]")
     ax.set_ylabel("Concentration [mol/m3]")
-    ax.set_title("Test 3 – Concentration vs Time\n@ change in initial concentration")
+    ax.set_title("Concentration vs Time\n@ change in initial concentration")
     ax.legend()
     ax.grid(True)
     plt.tight_layout()
     plt.show()
 
-    # ----------------------------------------------------------
-    # Task 3: C vs Position at t = T2 (3 curves)
-    # T2 is the elapsed time in the C2-injection phase for the used column,
-    # and the absolute time from injection start for the fresh-column references.
-    # ----------------------------------------------------------
-    z_b_arr = np.linspace(0.001, L_COL, N_STEPS)
-    tR_z    = t_R(z_b_arr)                                      # array over positions
-    sig_z   = 2.0 * tR_z * np.sqrt(D_L / (z_b_arr * u_col))
 
-    C1_vs_z  = 0.5 * C0_COL   * (1.0 + special.erf((T2 - tR_z) / sig_z))
-    C2_vs_z  = 0.5 * C2_BONUS * (1.0 + special.erf((T2 - tR_z) / sig_z))
-    # Used column: starts at C1, the (C2-C1) increment has propagated for T2 h
-    Cu_vs_z  = C0_COL + (C2_BONUS - C0_COL) * 0.5 * (1.0 + special.erf((T2 - tR_z) / sig_z))
+    # -------------------- Q3: C vs Position at t = T2 --------------------
+    
+    z_vals = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
+
+    C1_vs_z  = C_col(T2, z_vals, C0_COL)                                # Entrance concentration of C0
+    C2_vs_z  = C_col(T2, z_vals, C2_BONUS)                              # Entrrance concentration of C2
+    C_used_vs_z  = C_used_col(t_sat + T2, z_vals, C0_COL, C2_BONUS)     # Entrance concentration C2 on used column
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(z_b_arr, Cu_vs_z, label=f"t={T2}.0 [h] C2 on used column")
-    ax.plot(z_b_arr, C2_vs_z, label=f"t={T2}.0 [h] C2 on fresh column")
-    ax.plot(z_b_arr, C1_vs_z, label=f"t={T2}.0 [h] C1 on fresh column")
+    ax.plot(z_vals, C_used_vs_z, label=f"t={T2:.1f} [h] C2 on used column")
+    ax.plot(z_vals, C2_vs_z, label=f"t={T2:.1f} [h] C2 on fresh column")
+    ax.plot(z_vals, C1_vs_z, label=f"t={T2:.1f} [h] C1 on fresh column")
+    
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Concentration [mol/m3]")
-    ax.set_title("Test 3 – Concentration vs Position\n@ change in initial concentration")
+    ax.set_title("Concentration vs Position\n@ change in initial concentration")
     ax.legend()
     ax.grid(True)
     plt.tight_layout()
     plt.show()
 
-    # ==========================================================
-    #  PART B – Batch Adsorption in a Stirred Tank
-    # ==========================================================
+    # ==================== PART B – Batch Adsorption in a Stirred Tank ====================
 
     # ----------------------------------------------------------
-    # Task 1: Read CSV – Langmuir data in Lineweaver-Burk form
+    # -------------------- Task 1: Read CSV – Langmuir data in Lineweaver-Burk form --------------------
     #         1/q = (1/(qm*K)) * (1/C) + 1/qm
     # ----------------------------------------------------------
     df     = pd.read_csv("synthetic_data_models.csv")
@@ -416,11 +399,9 @@ if __name__ == "__main__":
     print(f"[Part B | Task 1]  Langmuir constants (rounded to 2 d.p.): "
           f"qm = {qm} g/g,  K = {K} L/g")
 
-    # ----------------------------------------------------------
-    # Tasks 2–4: Build isotherms, plot, find intersections
+    # -------------------- Tasks 2–4: Build isotherms, plot, find intersections --------------------
     # All four models share the same K (and qm for Langmuir),
     # rounded from the Lineweaver-Burk fit above.
-    # ----------------------------------------------------------
     C_plot = np.linspace(0.0, C0_PT2, N_STEPS)   # concentration axis for plot
 
     q_op   = operation_line(C_plot)
@@ -463,9 +444,7 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # ==========================================================
-    #  PART C – Continuous Stirred-Tank Adsorber (ODE)
-    # ==========================================================
+    # ==================== PART C – Continuous Stirred-Tank Adsorber (ODE) ====================
 
     t_c_arr = np.linspace(0.0, TF2, N_STEPS)   # time vector [s]
     y0      = [0.0, 0.0]                        # initial state: C(0)=0, q(0)=0
