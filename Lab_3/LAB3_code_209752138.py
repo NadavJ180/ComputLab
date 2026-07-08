@@ -5,48 +5,51 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math as math
 from scipy.integrate import solve_ivp
+from scipy.interpolate import interp1d
 import pandas as pd
 
 # TEST 3 part A
-L_COL = 100  # m
-TF = 50  # h
-D_L = 2.2  # m2/h
-Q_IN = 0.21  # m3/h
-T2=12 #m
-Z2=41 #m
+L_COL = 20  # m
+TF = 30  # h
+D_L = 0.027  # m2/h
+Q_IN = 0.07  # m3/h
+T2=5 #m
+Z2=5 #m
 
 
 
 # TEST 3 part B+C
 
-VL = 100
-W = 88
-C0_PT2 = 0.44
+VL = 50 
+W = 120
+C0_PT2 = 1
 
-n1 = 1.15
-n2 = 0.85
+n1 = 1.3
+n2 = 0.7
 
-Q_PT3 = 12
-VS = 2
-KCA = 0.066
-TF2 = 50
+Q_PT3 = 5
+VS = 3
+KCA = 0.072
+TF2 = 100
 
 # ---------- Further Variables - Part A ----------
-EPS     = 0.37       # Bed void fraction                             [-]
-A_COL   = 0.3        # Column cross-sectional area                   [m2]
-C0_COL  = 0.72       # Column inlet concentration                    [mol/m3]
-K_EQ    = 5.2e-3     # Equilibrium constant (column)                 [-]
-N_STEPS = 1000       # Discretisation points for all plots
-Z_OR_T_START = 0.001 # Minimum z or t                                [m]
-T_REQ   = 9.42       # Requested evaluation time, Part A Task 1      [h]
-Z_REQ   = 37.37      # Requested evaluation position, Part A Task 1  [m]
+EPS     = 0.4       # Bed void fraction                              [-]
+A_COL   = 0.2        # Column cross-sectional area                   [m2]
+C0_COL  = 0.2       # Column inlet concentration                     [mol/m3]
+K_EQ    = 2.2e-3     # Equilibrium constant                          [-]
+N_STEPS = 1000       # Step number for all plots
+Z_OR_T_START = 0.001 # Initial z or t for graphs                     [m]
+T_REQ   = 15.83       # Requested evaluation time, Part A Task 1     [h]
+Z_REQ   = 14.2      # Requested evaluation position, Part A Task 1  [m]
 
 # ---------- Further Variables - Part A2 Bonus ----------
-C2_BONUS = 1.0       # Second-phase inlet concentration              [mol/m3]
+C2_BONUS = 0.3       # Second-phase inlet concentration              [mol/m3]
 
 # Derived interstitial (pore) velocity
 u_col = Q_IN / (A_COL * EPS)   # [m/h]
 
+# ---------- Further Variables - Part B Bonus ----------
+N_STEPS_B = 100       # Step number for all plots
 
 # ==================== Part A - Column Adsorption Functions ============================
 
@@ -323,23 +326,24 @@ def adsorber_ode(t, y, inv_func, model_args):
 
 def linear_interp_crossing(t_arr, q_arr, q_target):
     """
-    Find the first time q_arr crosses q_target using linear interpolation
-    between the two bracketing points.
+    Find the time at which q_arr reaches q_target, using linear interpolation
+    (scipy's interp1d). Assumes q_arr is monotonically increasing with time,
+    which holds here since the solid is only ever adsorbing.
 
     Parameters:
-        t_arr    (ndarray): time vector
-        q_arr    (ndarray): solid-loading vector
+        t_arr    (ndarray): time vector (fine grid, for accurate interpolation)
+        q_arr    (ndarray): solid-loading vector, matching t_arr
         q_target (float): target content in the adsorbant [g/g]
     Returns:
-        float: interpolated crossing time, or np.nan if not reached
+        float: interpolated crossing time, or np.nan if q_target is never reached
     """
-    for i in range(len(q_arr) - 1):
-        if q_arr[i] <= q_target <= q_arr[i + 1]:
-            # Linear interpolation: t_cross = t_i + (q_target - q_i)/Δq * Δt
-            dt = t_arr[i + 1] - t_arr[i]
-            dq = q_arr[i + 1] - q_arr[i]
-            return t_arr[i] + (q_target - q_arr[i]) / dq * dt
-    return np.nan
+    if q_target > q_arr[-1]:      # q_target never reached within t_arr
+        return np.nan
+
+    q_to_t = interp1d(q_arr, t_arr, kind="linear")   # Linear interpolation, q -> t
+    t_cross = q_to_t(q_target)
+
+    return float(t_cross)
 
 
 # ==============================================================
@@ -464,8 +468,7 @@ if __name__ == "__main__":
     q_m = 1.0 / intercept                                           # max adsorption capacity [g/g]
     K = intercept / slope                                           # equilibrium constant [L/g]        K = (1/qm) / (1/qm*K) 
 
-    print(f"\n[Part B | Q1] Linear Langmuir constants (unrounded): qm = {q_m} [g/g], "
-          f"K = {K} [L/g]")
+    print(f"\n[Part B | Q1] Langmuir constants (unrounded): qm = {q_m} [g/g], K = {K} [L/g]")
     
     q_m_round = round(q_m, 2)                                 
     K_round  = round(K, 2)                                
@@ -473,7 +476,7 @@ if __name__ == "__main__":
 
     # -------------------- Q3-4: q vs C in all models + their maximum recovery --------------------
 
-    C_vals = np.linspace(0.0, C0_PT2, N_STEPS)   # concentration values for plot
+    C_vals = np.linspace(0.0, C0_PT2, N_STEPS_B)   # concentration values for plot
 
     q_op   = operation_line(C_vals)
     q_hen  = henry_isotherm(C_vals, K_round)
@@ -485,8 +488,8 @@ if __name__ == "__main__":
     ax.plot(C_vals, q_op,   label="Operation line", color="blue")
     ax.plot(C_vals, q_hen,  label="Equilibrium line (Henry's law)", color="orange")
     ax.plot(C_vals, q_lang, label="Equilibrium line (Langmuir model)", color="green")
-    ax.plot(C_vals, q_fr1,  label=f"Equilibrium line (Freundlich model) n={n1}", color="red")
-    ax.plot(C_vals, q_fr2,  label=f"Equilibrium line (Freundlich model) n={n2}", color="purple")
+    ax.plot(C_vals, q_fr1,  label=f"Equilibrium line (Freundlich model) n={n1:.2f}", color="red")
+    ax.plot(C_vals, q_fr2,  label=f"Equilibrium line (Freundlich model) n={n2:.2f}", color="purple")
 
     # Dictionary for the model functions and their arguments
     isotherms = {
@@ -496,7 +499,7 @@ if __name__ == "__main__":
         f"Freundlich n={n2}": (freundlich_isotherm, (K_round, n2)),
     }
 
-    print("\n[Part B | Q4]  Equilibrium intersections (max recovery):")
+    print("\n[Part B | Q4] Equilibrium intersections (max recovery):")
     
     for name, (func, model_args) in isotherms.items():
         initial_guess = C0_PT2 / 2                                          # Initial guess in middle of operating range
@@ -528,12 +531,13 @@ if __name__ == "__main__":
         "No Adsorption": (None, (), "black"),
         "Henry": (henry_inv, (K_round,), "tab:blue"),
         "Langmuir": (langmuir_inv, (K_round, q_m_round), "orange"),
-        f"Freundlich n={n1}": (freundlich_inv, (K_round, n1), "green"),
-        f"Freundlich n={n2}": (freundlich_inv, (K_round, n2), "red"),
+        f"Freundlich n={n1:.2f}": (freundlich_inv, (K_round, n1), "green"),
+        f"Freundlich n={n2:.2f}": (freundlich_inv, (K_round, n2), "red"),
     }
 
     q_target = 0.25 * q_m_round
-    best_name, best_time = None, np.inf             # Initialize the best time and model to get to 25% q_m
+    print(f'\n[Part C | Q3] Target q = 25% qm = {q_target} [g/g]')
+    best_name, best_time = None, np.inf                             # Initialize the best time and model to get to 25% q_m
 
     fig1, ax1 = plt.subplots(figsize=(9, 5))
     fig2, ax2 = plt.subplots(figsize=(9, 5))
@@ -541,7 +545,7 @@ if __name__ == "__main__":
     for name, (inv_func, model_args, color) in inv_isotherm_funcs.items():
         
         sol = solve_ivp(adsorber_ode, t_span=(0.0, TF2), y0=y0, 
-                        t_eval=t_vals_c, args=(inv_func, model_args))
+                        t_eval=t_vals_c, dense_output=True, args=(inv_func, model_args), rtol=1e-10, atol=1e-12)
         
         C_sol = sol.y[0]
         q_sol = sol.y[1]
@@ -550,12 +554,15 @@ if __name__ == "__main__":
         ax1.plot(t_vals_c, C_sol, label=name, color=color)
         
         if name == "No Adsorption":       # No adsorption is irrelevant for concentration on solid and time to 25% q_m
-            continue
+            print('')                     # Empty line for easier reading 
         else:
             ax2.plot(t_vals_c, q_sol, label=name, color=color)
 
-            # Intersection calculation
-            t_cross = linear_interp_crossing(t_vals_c, q_sol, q_target)
+            # Intersection calculation - a much finer time grid is used here (via the ODE's
+            # dense output) so the linear interpolation lands much closer to the true crossing time
+            t_fine = np.linspace(0.0, TF2, N_STEPS * 100)
+            q_fine = sol.sol(t_fine)[1]
+            t_cross = linear_interp_crossing(t_fine, q_fine, q_target)
             print(f"[Part C | Q3] {name}: t(q = 25% qm) = {t_cross:.5f} [s]")
 
             if t_cross < best_time:         # Update the best time and model to get to 25% q_m
@@ -579,4 +586,3 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     plt.show()
-    
