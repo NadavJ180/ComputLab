@@ -9,47 +9,48 @@ from scipy.interpolate import interp1d
 import pandas as pd
 
 # TEST 3 part A
-L_COL = 20  # m
-TF = 30  # h
-D_L = 0.027  # m2/h
-Q_IN = 0.07  # m3/h
-T2=5 #m
-Z2=5 #m
+L_COL = 100  # m
+TF = 50  # h
+D_L = 2.2  # m2/h
+Q_IN = 0.21  # m3/h
+T2=12 #m
+Z2=42 #m
 
 
 
 # TEST 3 part B+C
 
-VL = 50 
-W = 120
-C0_PT2 = 1
+VL = 100 
+W = 88
+C0_PT2 = 0.44
 
-n1 = 1.3
-n2 = 0.7
+n1 = 1.15
+n2 = 0.85
 
-Q_PT3 = 5
-VS = 3
-KCA = 0.072
-TF2 = 100
+Q_PT3 = 12
+VS = 2
+KCA = 0.066
+TF2 = 50
 
 # ---------- Further Variables - Part A ----------
-EPS     = 0.4       # Bed void fraction                              [-]
-A_COL   = 0.2        # Column cross-sectional area                   [m2]
-C0_COL  = 0.2       # Column inlet concentration                     [mol/m3]
-K_EQ    = 2.2e-3     # Equilibrium constant                          [-]
-N_STEPS = 1000       # Step number for all plots
-Z_OR_T_START = 0.001 # Initial z or t for graphs                     [m]
-T_REQ   = 15.83       # Requested evaluation time, Part A Task 1     [h]
-Z_REQ   = 14.2      # Requested evaluation position, Part A Task 1  [m]
+EPS          = 0.37      # Bed void fraction                              [-]
+A_COL        = 0.3       # Column cross-sectional area                   [m2]
+C0_COL       = 0.72      # Column inlet concentration                     [mol/m3]
+K_EQ         = 5.2e-3    # Equilibrium constant                          [-]
+N_STEPS      = 1000      # Step number for all plots
+Z_OR_T_START = 0.001     # Initial z or t for graphs                     [m]
+T_REQ        = 9.42      # Requested evaluation time, Part A Task 1     [h]
+Z_REQ        = 37.37     # Requested evaluation position, Part A Task 1  [m]
 
-# ---------- Further Variables - Part A2 Bonus ----------
-C2_BONUS = 0.3       # Second-phase inlet concentration              [mol/m3]
+# ---------- Further Variables - Part A Bonus ----------
+C2_BONUS     = 1       # Second-phase inlet concentration              [mol/m3]
 
 # Derived interstitial (pore) velocity
-u_col = Q_IN / (A_COL * EPS)   # [m/h]
+u_col        = Q_IN / (A_COL * EPS)   # [m/h]
 
-# ---------- Further Variables - Part B Bonus ----------
-N_STEPS_B = 100       # Step number for all plots
+# ---------- Further Variables - Part B ----------
+N_STEPS_B    = 100       # Step number for part B plots
+
 
 # ==================== Part A - Column Adsorption Functions ============================
 
@@ -66,7 +67,6 @@ def t_R(z):
         float | ndarray: retardation time/s [h]
     """
     return (z / u_col) * (1.0 + (1.0 - EPS) / EPS * K_EQ)
-
 
 def C_col(t, z, C0=C0_COL):
     """
@@ -103,16 +103,7 @@ def t_breakthrough(z, ratio):
     return tR + sigma * special.erfinv(2.0 * ratio - 1.0)
 
 
-# ==================== BONUS - Part A2: Used-Column Functions ====================
-
-# -------------------- Q1: Saturation time --------------------
-
-def t_saturation():
-    """
-    Time when the column exit reaches 99.99 % of C0.
-    Uses t_breakthrough from part A with ratio = 0.9999.
-    """
-    return t_breakthrough(L_COL, ratio=0.9999)
+# ==================== Part A - BONUS: Used-Column Functions ====================
 
 # -------------------- Q2 + Q3: C vs Time, Position at z = Z2, t = T2 --------------------
 
@@ -128,15 +119,15 @@ def C_used_col(t_arr, z, C1=C0_COL, C2=C2_BONUS):
 
     Parameters:
         t_arr (ndarray): absolute time vector [h]
-        z     (float): position [m]
-        C1    (float): first-phase concentration [mol/m3]
-        C2    (float): second-phase concentration [mol/m3]
-        t_sat (float): column saturation time [h] 
+        z       (float): position [m]
+        C1      (float): first-phase concentration [mol/m3]
+        C2      (float): second-phase concentration [mol/m3]
+        t_sat   (float): column saturation time [h] 
     Returns:
         ndarray: concentration [mol/m3]
     """
     
-    t_sat = t_saturation()                                                      # Saturation time for 99.99% C0
+    t_sat = t_breakthrough(L_COL, ratio=0.9999)                                 # Saturation time for 99.99% C0
     t_arr = np.asarray(t_arr, dtype=float)                                      # Makes sure this is np array
     tR    = t_R(z)                                                              # Retardation time at z
     sigma = 2.0 * tR * np.sqrt(D_L / (z * u_col))
@@ -152,7 +143,7 @@ def C_used_col(t_arr, z, C1=C0_COL, C2=C2_BONUS):
 
 # -------------------- Q1: Read CSV, find q_m & K --------------------
 
-def import_CSV(Test_Num=None, q_inv_col=None):
+def import_CSV(Test_Num=None):
     """
     Imports the CSV for the specified test of the linearized Langmuir isotherm (Linweaver-Burk)
     
@@ -161,19 +152,18 @@ def import_CSV(Test_Num=None, q_inv_col=None):
     We import without row 0 (contains titles). If the test number is not supplied, asks for manual input of test number.
 
     Parameters:
-        Test_Num (int): the test number we are currently running
+        Test_Num  (int): the test number we are currently running
     Returns:
         inv_C (ndarray): inverted concentration of the relevant test [L/g]
-        inv_q (ndarray): inverted final content in adsorbant [g/g] 
+        inv_q (ndarray): inverted final content in adsorbant of the relevant test [g/g] 
     """
     if Test_Num is None:
         Test_Num = int(input("Input relevant test number (1 / 2 / 3): "))
     
 
-    df = pd.read_csv("synthetic_data_models.csv") 
-    col_num_dict = {1: 1, 2: 3}
-    inv_C  = df[f"Test {Test_Num}"].iloc[1:].astype(float).values           # Skip row 0, contains titles
-    inv_q  = df[f"Unnamed: {2*Test_Num-1}"].iloc[1:].astype(float).values   # Imports the row that corresponds to the test number
+    df           = pd.read_csv("synthetic_data_models.csv") 
+    inv_C        = df[f"Test {Test_Num}"].iloc[1:].astype(float).values           # Skip row 0, contains titles, imports col (inv_C) for specified test
+    inv_q        = df[f"Unnamed: {2*Test_Num-1}"].iloc[1:].astype(float).values   # Imports col (inv_q) for specified test
 
     return inv_C, inv_q
 
@@ -185,7 +175,7 @@ def henry_isotherm(C, K):
 
     Parameters:
         C (float | ndarray): liquid concentration [g/L]
-        K (float): Henry constant [L/g]
+        K           (float): Henry constant [L/g]
     Returns:
         q (float | ndarray): final content in adsorbant [g/g]
     """
@@ -199,10 +189,10 @@ def langmuir_isotherm(C, qm, K):
 
     Parameters:
         C  (float | ndarray): liquid concentration [g/L]
-        qm (float): maximum content in adsorbant [g/g]
-        K  (float): equilibrium (affinity) constant [L/g]
+        qm           (float): maximum content in adsorbant [g/g]
+        K            (float): equilibrium (affinity) constant [L/g]
     Returns:
-        q (float | ndarray): final content in adsorbant [g/g]
+        q  (float | ndarray): final content in adsorbant [g/g]
     """
     q = qm * K * C / (1.0 + K * C)
 
@@ -214,8 +204,8 @@ def freundlich_isotherm(C, K, n):
 
     Parameters:
         C (float | ndarray): liquid concentration [g/L]
-        K (float): Freundlich constant [L/g]
-        n (float): Freundlich exponent [-]
+        K           (float): Freundlich constant [L/g]
+        n           (float): Freundlich exponent [-]
     Returns:
         q (float | ndarray): final content in adsorbant [g/g]
     """
@@ -232,10 +222,10 @@ def operation_line(C, C0=C0_PT2, q0=0.0):
     
     Parameters:
         C  (float | ndarray): liquid concentration [g/L]
-        C0 (float): initial liquid concentration [g/L]
-        q0 (float): initial content in adsorbant [g/g]
+        C0           (float): initial liquid concentration [g/L]
+        q0           (float): initial content in adsorbant [g/g]
     Returns:
-        q (float | ndarray): final content in the adsorbant (at a specific liquid concetration) [g/g]
+        q  (float | ndarray): final content in the adsorbant (at a specific liquid concetration) [g/g]
     """
     q = q0 + (VL / W) * (C0 - C)
 
@@ -248,11 +238,11 @@ def isotherm_residual(C, func, model_args):
 
     Parameters:
         C  (float | ndarray): liquid concentration [g/L]
-        func (function): one of the isotherms (henry/langmuir/freundlich) [g/L]
-        model_args (tuple): further arguments for the model equation (q_m / K / n)
+        func      (function): one of the isotherms (henry/langmuir/freundlich) [g/L]
+        model_args   (tuple): further arguments for the model equation (q_m / K / n)
 
     Returns:
-        Res (float): Residual between isotherm and operation line
+        Res          (float): Residual between isotherm and operation line
     """
     Res = func(C, *model_args) - operation_line(C)
     
@@ -266,7 +256,7 @@ def henry_inv(q, K):
 
     Parameters:
         q (float | ndarray): final content in adsorbant [g/g]    
-        K (float): Henry constant [L/g]
+        K           (float): Henry constant [L/g]
     Returns:
         C (float | ndarray): liquid concentration [g/L]
     """
@@ -281,10 +271,10 @@ def langmuir_inv(q, K, q_m):
 
     Parameters:
         q (float | ndarray): final content in adsorbant [g/g]
-        qm (float): maximum content in adsorbant [g/g]
-        K  (float): equilibrium (affinity) constant [L/g]
+        qm          (float): maximum content in adsorbant [g/g]
+        K           (float): equilibrium (affinity) constant [L/g]
     Returns:
-        C  (float | ndarray): liquid concentration [g/L]
+        C (float | ndarray): liquid concentration [g/L]
     """
     C = q / (K * np.maximum(q_m - q, 1e-10))
     
@@ -297,8 +287,8 @@ def freundlich_inv(q, K, n):
 
     Parameters:
         q (float | ndarray): final content in adsorbant [g/g]
-        K (float): Freundlich constant [L/g]
-        n (float): Freundlich exponent [-]
+        K           (float): Freundlich constant [L/g]
+        n           (float): Freundlich exponent [-]
     Returns:
         C (float | ndarray): liquid concentration [g/L]
     """
@@ -326,14 +316,14 @@ def adsorber_ode(t, y, inv_func, model_args):
 
 def linear_interp_crossing(t_arr, q_arr, q_target):
     """
-    Find the time at which q_arr reaches q_target, using linear interpolation
-    (scipy's interp1d). Assumes q_arr is monotonically increasing with time,
-    which holds here since the solid is only ever adsorbing.
+    Find the time at which q_arr reaches q_target, using linear interpolation. 
+    Assumes q_arr is monotonically increasing with time,
+    which holds here since the solid is only adsorbing.
 
     Parameters:
-        t_arr    (ndarray): time vector (fine grid, for accurate interpolation)
-        q_arr    (ndarray): solid-loading vector, matching t_arr
-        q_target (float): target content in the adsorbant [g/g]
+        t_arr    (ndarray): time values
+        q_arr    (ndarray): solid-loading values, matching t_arr
+        q_target   (float): target content in the adsorbant [g/g]
     Returns:
         float: interpolated crossing time, or np.nan if q_target is never reached
     """
@@ -360,12 +350,13 @@ if __name__ == "__main__":
     
     # -------------------- Q2: C vs Time - 10 % column-length steps --------------------
 
-    z_vals = np.linspace(L_COL / 10, L_COL, 10)   # z jumps of 10%
-    t_vals_c  = np.linspace(Z_OR_T_START, TF, N_STEPS)
+    z_vals_A2 = np.linspace(L_COL / 10, L_COL, 10)   # z jumps of 10%
+    t_vals_A2 = np.linspace(Z_OR_T_START, TF, N_STEPS)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    for z_val in z_vals:                                                    # Plot a curve for each position increment
-        ax.plot(t_vals_c, C_col(t_vals_c, z_val), label=f"z={z_val:.1f} [m]")
+    fig, ax   = plt.subplots(figsize=(9, 5))
+    
+    for z_val in z_vals_A2:                                                    # Plot a curve for each position increment
+        ax.plot(t_vals_A2, C_col(t_vals_A2, z_val), label=f"z={z_val:.1f} m")
     ax.set_xlabel("Time [hours]")
     
     ax.set_ylabel("Concentration [mol/m3]")
@@ -378,12 +369,12 @@ if __name__ == "__main__":
     
     # -------------------- Q3: C vs Position - 10 % TF steps --------------------
 
-    t_vals_c = np.linspace(TF / 10, TF, 10)          # t jumps of 10%
-    z_vals  = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
+    t_vals_A3 = np.linspace(TF / 10, TF, 10)          # t jumps of 10%
+    z_vals_A3 = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    for t_val in t_vals_c:                                                        # Plot a curve for each time increment
-        ax.plot(z_vals, C_col(t_val, z_vals), label=f"t={t_val:.1f} hours")
+    fig, ax   = plt.subplots(figsize=(9, 5))
+    for t_val in t_vals_A3:                                                        # Plot a curve for each time increment
+        ax.plot(z_vals_A3, C_col(t_val, z_vals_A3), label=f"t={t_val:.1f} hours")
     
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Concentration [mol/m3]")
@@ -397,34 +388,34 @@ if __name__ == "__main__":
     # -------------------- Q4: Breakthrough time (C/C0 = 1%) --------------------
     
     t_BT = t_breakthrough(L_COL, ratio=0.01)
-    print(f"[Part A | Q4]  Breakthrough time for C/C0=1% at z=L: {t_BT:.3f} [h]")
+    print(f"\n[Part A | Q4]  Breakthrough time for C/C0=1% at z=L: {t_BT:.3f} [h]")
     
 
-    # ==================== BONUS - Part A2: Used Column ====================
+    # ==================== Part A - BONUS: Used Column ====================
 
     # -------------------- Q1: Saturation time --------------------
-    t_sat      = t_saturation()                                                 # Time for exit concentration to br 99.99% C0
+    t_sat      = t_breakthrough(L_COL, ratio=0.9999)                     # Time for exit concentration to be 99.99% C0
     t_sat_ceil = math.ceil(t_sat)
-    print(f"\n[Bonus  | Q1]  Saturation time (99.99 % of C0): {t_sat:.5f} [h]")
-    print(f"[Bonus  | Q1]  Rounded-up saturation time      : {t_sat_ceil} [h]")
+    print(f"\n\n[Bonus  | Q1]  Saturation time (99.99 % of C0): {t_sat:.5f} [h]")
+    print(f"               Rounded-up saturation time: {t_sat_ceil} [h]")
 
 
     # -------------------- Q2: C vs Time at z = Z2 --------------------
 
-    t_max   = 2 * t_sat_ceil                            
-    t_vals_c = np.linspace(Z_OR_T_START, t_max, N_STEPS)       
+    t_max           = 2 * t_sat_ceil                            
+    t_vals_A2_Bonus = np.linspace(Z_OR_T_START, t_max, N_STEPS)       
 
-    C1_vs_t = C_col(t_vals_c, Z2, C0_COL)                              # Entrance concentration of C0
-    C2_vs_t = C_col(t_vals_c, Z2, C2_BONUS)                            # Entrrance concentration of C2
-    C_used_vs_t = C_used_col(t_vals_c, Z2, C0_COL, C2_BONUS)           # Entrance concentration C2 on used column
+    C1_vs_t         = C_col(t_vals_A2_Bonus, Z2, C0_COL)                              # Entrance concentration of C0
+    C2_vs_t         = C_col(t_vals_A2_Bonus, Z2, C2_BONUS)                            # Entrance concentration of C2
+    C_used_vs_t     = C_used_col(t_vals_A2_Bonus, Z2, C0_COL, C2_BONUS)               # Entrance concentration C2 on used column
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(t_vals_c, C1_vs_t, label=f"z={Z2:.1f} [m] C1 on fresh column")
-    ax.plot(t_vals_c, C2_vs_t, label=f"z={Z2:.1f} [m] C2 on fresh column")
-    ax.plot(t_vals_c, C_used_vs_t, label=f"z={Z2:.1f} [m] C2 on used column")
+    fig, ax         = plt.subplots(figsize=(9, 5))
+    ax.plot(t_vals_A2_Bonus, C1_vs_t, label=f"z={Z2:.1f} [m] C1 on fresh column")
+    ax.plot(t_vals_A2_Bonus, C2_vs_t, label=f"z={Z2:.1f} [m] C2 on fresh column")
+    ax.plot(t_vals_A2_Bonus, C_used_vs_t, label=f"z={Z2:.1f} [m] C2 on used column")
     
-    ax.axvspan(0, t_sat_ceil, color='gold', alpha=0.15)                     # color background up to t_sat
-    ax.axvspan(t_sat_ceil, t_vals_c[-1], color='gray', alpha=0.15)            # color background from t_sat
+    ax.axvspan(0, t_sat_ceil, color='gold', alpha=0.15)                       # color background up to t_sat
+    ax.axvspan(t_sat_ceil, t_vals_A2_Bonus[-1], color='gray', alpha=0.15)     # color background from t_sat
     ax.set_xlabel("Time [hours]")
     ax.set_ylabel("Concentration [mol/m3]")
     ax.set_title("Concentration vs Time\n@ change in initial concentration")
@@ -436,16 +427,16 @@ if __name__ == "__main__":
 
     # -------------------- Q3: C vs Position at t = T2 --------------------
     
-    z_vals = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
+    z_vals_A3_Bonus = np.linspace(Z_OR_T_START, L_COL, N_STEPS)
 
-    C1_vs_z  = C_col(T2, z_vals, C0_COL)                                # Entrance concentration of C0
-    C2_vs_z  = C_col(T2, z_vals, C2_BONUS)                              # Entrrance concentration of C2
-    C_used_vs_z  = C_used_col(t_sat + T2, z_vals, C0_COL, C2_BONUS)     # Entrance concentration C2 on used column
+    C1_vs_z         = C_col(T2, z_vals_A3_Bonus, C0_COL)                                # Entrance concentration of C0
+    C2_vs_z         = C_col(T2, z_vals_A3_Bonus, C2_BONUS)                              # Entrrance concentration of C2
+    C_used_vs_z     = C_used_col(t_sat + T2, z_vals_A3_Bonus, C0_COL, C2_BONUS)         # Entrance concentration C2 on used column
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(z_vals, C_used_vs_z, label=f"t={T2:.1f} [h] C2 on used column")
-    ax.plot(z_vals, C2_vs_z, label=f"t={T2:.1f} [h] C2 on fresh column")
-    ax.plot(z_vals, C1_vs_z, label=f"t={T2:.1f} [h] C1 on fresh column")
+    fig, ax         = plt.subplots(figsize=(9, 5))
+    ax.plot(z_vals_A3_Bonus, C_used_vs_z, label=f"t={T2:.1f} [h] C2 on used column")
+    ax.plot(z_vals_A3_Bonus, C2_vs_z, label=f"t={T2:.1f} [h] C2 on fresh column")
+    ax.plot(z_vals_A3_Bonus, C1_vs_z, label=f"t={T2:.1f} [h] C1 on fresh column")
     
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Concentration [mol/m3]")
@@ -459,30 +450,31 @@ if __name__ == "__main__":
 
     # -------------------- Q1: Read CSV, find q_m & K --------------------
     
-    VL_dict = {50: 1, 122: 2, 100: 3}     # Dictionary of which solution volume corresponds to which test number
-    Test_Num = VL_dict.get(VL, None)      # Finds the test number using the solution volume, if not one of the OG tests, returns None
-    inv_C, inv_q = import_CSV(Test_Num)
+    VL_dict          = {50: 1, 122: 2, 100: 3}       # Dictionary of which solution volume corresponds to which test number
+    Test_Num         = VL_dict.get(VL, None)         # Finds the test number using the solution volume, if not one of the OG tests, returns None
+    inv_C, inv_q     = import_CSV(Test_Num)
 
-    slope, intercept = np.polyfit(inv_C, inv_q, 1)                  # Linear regression for Linweaver Berk
+    slope, intercept = np.polyfit(inv_C, inv_q, 1)   # Linear regression for Linweaver Berk
     
-    q_m = 1.0 / intercept                                           # max adsorption capacity [g/g]
-    K = intercept / slope                                           # equilibrium constant [L/g]        K = (1/qm) / (1/qm*K) 
+    q_m              = 1.0 / intercept               # max adsorption capacity [g/g]
+    K                = intercept / slope             # equilibrium constant [L/g]        K = (1/qm) / (1/qm*K) 
 
-    print(f"\n[Part B | Q1] Langmuir constants (unrounded): qm = {q_m} [g/g], K = {K} [L/g]")
+    print(f"\n\n[Part B | Q1] Langmuir constants (unrounded): qm = {q_m} [g/g], K = {K} [L/g]")
     
-    q_m_round = round(q_m, 2)                                 
-    K_round  = round(K, 2)                                
+    q_m_round        = round(q_m, 2)                                 
+    K_round          = round(K, 2)                                
     
+    print(f"              Langmuir constants (rounded): qm = {q_m_round:.2f} [g/g], K = {K_round:.2f} [L/g]")
 
     # -------------------- Q3-4: q vs C in all models + their maximum recovery --------------------
 
     C_vals = np.linspace(0.0, C0_PT2, N_STEPS_B)   # concentration values for plot
 
-    q_op   = operation_line(C_vals)
-    q_hen  = henry_isotherm(C_vals, K_round)
-    q_lang = langmuir_isotherm(C_vals, q_m_round, K_round)
-    q_fr1  = freundlich_isotherm(C_vals, K_round, n1)
-    q_fr2  = freundlich_isotherm(C_vals, K_round, n2)
+    q_op    = operation_line(C_vals)
+    q_hen   = henry_isotherm(C_vals, K_round)
+    q_lang  = langmuir_isotherm(C_vals, q_m_round, K_round)
+    q_fr1   = freundlich_isotherm(C_vals, K_round, n1)
+    q_fr2   = freundlich_isotherm(C_vals, K_round, n2)
 
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(C_vals, q_op,   label="Operation line", color="blue")
@@ -502,16 +494,15 @@ if __name__ == "__main__":
     print("\n[Part B | Q4] Equilibrium intersections (max recovery):")
     
     for name, (func, model_args) in isotherms.items():
-        initial_guess = C0_PT2 / 2                                          # Initial guess in middle of operating range
+        initial_guess = C0_PT2 / 2                                                         # Initial guess in middle of operating range
         
-        C_eq_arr = fsolve(isotherm_residual, 
-                          initial_guess, args=(func, model_args))           # Finds the intersection point
-        C_eq = C_eq_arr[0]                                                  # Turns the array output of fsolve into a float
+        C_eq_arr      = fsolve(isotherm_residual, initial_guess, args=(func, model_args))  # Finds the intersection point
+        C_eq          = C_eq_arr[0]                                                        # Turns the array output of fsolve into a float
         
-        q_eq = operation_line(C_eq)
+        q_eq          = operation_line(C_eq)
 
-        print(f"[Part B | Q4] {name}: C_eq = {C_eq:.5f} [g/L],  q_eq = {q_eq:.5f} [g/g]")
-        ax.scatter(C_eq, q_eq, color="black", zorder=5)                     # Plot the intersetion points on the plot
+        print(f"              {name}: C_eq = {C_eq:.5f} [g/L],  q_eq = {q_eq:.5f} [g/g]")
+        ax.scatter(C_eq, q_eq, color="black", zorder=5)                                    # Plot the intersetion points on the plot
 
     ax.set_xlabel("C (g/L)")
     ax.set_ylabel("q (g/g)")
@@ -523,10 +514,10 @@ if __name__ == "__main__":
 
     # ==================== PART C - Continuous Stirred-Tank ODE ====================
 
-    t_vals_c = np.linspace(0.0, TF2, N_STEPS)    # Time values [s]
-    y0 = [0.0, 0.0]                              # Initial conditions: C(0)=0, q(0)=0
+    t_vals_C = np.linspace(0.0, TF2, N_STEPS)    # Time values [s]
+    y0       = [0.0, 0.0]                        # Initial conditions: C(0)=0, q(0)=0
 
-    # Dictionary for the inverse model functions and their arguments
+    # Dictionary for the inverse model functions, their arguments and color schemes
     inv_isotherm_funcs = {
         "No Adsorption": (None, (), "black"),
         "Henry": (henry_inv, (K_round,), "tab:blue"),
@@ -535,41 +526,38 @@ if __name__ == "__main__":
         f"Freundlich n={n2:.2f}": (freundlich_inv, (K_round, n2), "red"),
     }
 
-    q_target = 0.25 * q_m_round
-    print(f'\n[Part C | Q3] Target q = 25% qm = {q_target} [g/g]')
+    q_target             = 0.25 * q_m_round
+    print(f'\n\n[Part C | Q3] Target q = 25% qm = {q_target} [g/g]')
+    
     best_name, best_time = None, np.inf                             # Initialize the best time and model to get to 25% q_m
 
-    fig1, ax1 = plt.subplots(figsize=(9, 5))
-    fig2, ax2 = plt.subplots(figsize=(9, 5))
+    fig1, ax1            = plt.subplots(figsize=(9, 5))
+    fig2, ax2            = plt.subplots(figsize=(9, 5))
 
     for name, (inv_func, model_args, color) in inv_isotherm_funcs.items():
         
-        sol = solve_ivp(adsorber_ode, t_span=(0.0, TF2), y0=y0, 
-                        t_eval=t_vals_c, dense_output=True, args=(inv_func, model_args), rtol=1e-10, atol=1e-12)
+        sol   = solve_ivp(adsorber_ode, t_span=(0.0, TF2), y0=y0, 
+                        t_eval=t_vals_C, dense_output=True, args=(inv_func, model_args), rtol=1e-10, atol=1e-12)
         
         C_sol = sol.y[0]
         q_sol = sol.y[1]
 
         # Plotting
-        ax1.plot(t_vals_c, C_sol, label=name, color=color)
+        ax1.plot(t_vals_C, C_sol, label=name, color=color)
         
         if name == "No Adsorption":       # No adsorption is irrelevant for concentration on solid and time to 25% q_m
-            print('')                     # Empty line for easier reading 
+            continue                    
         else:
-            ax2.plot(t_vals_c, q_sol, label=name, color=color)
+            ax2.plot(t_vals_C, q_sol, label=name, color=color)
 
-            # Intersection calculation - a much finer time grid is used here (via the ODE's
-            # dense output) so the linear interpolation lands much closer to the true crossing time
-            t_fine = np.linspace(0.0, TF2, N_STEPS * 100)
-            q_fine = sol.sol(t_fine)[1]
-            t_cross = linear_interp_crossing(t_fine, q_fine, q_target)
-            print(f"[Part C | Q3] {name}: t(q = 25% qm) = {t_cross:.5f} [s]")
+            t_cross = linear_interp_crossing(t_vals_C, q_sol, q_target)         # finds time to 25% qm for each model
+            print(f"              {name}: t(q) = {t_cross:.5f} [s]")
 
             if t_cross < best_time:         # Update the best time and model to get to 25% q_m
                 best_time = t_cross
                 best_name = name
 
-    print(f"[Part C | Q3]  Fastest model to reach q_target: {best_name} (t = {best_time:.5f} [s])")
+    print(f"              Fastest model to reach q = 25% qm: {best_name}, best time = {best_time:.5f} [s]")
 
     # Graph decorations
     ax1.set_xlabel("Time [s]")
