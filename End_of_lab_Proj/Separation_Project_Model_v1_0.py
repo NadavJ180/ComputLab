@@ -1,34 +1,15 @@
-"""
-Separation_Project_Model_v2_0.py
-
-Computational Lab Project - Separation Processes (Technion, 0540309)
-Models the exam question written for Assignment #1 (Sections A - D):
-a continuous centrifuge followed by an ultrafiltration (UF) membrane,
-used to purify a protein produced inside cells.
-
-Author: Nadav, ChemEng undergraduate (3rd year)
-Date: July 2026
-
-Changelog:
-v1.0 - initial full build
-v2.0 - simplified: no global plot styling, section numbers only
-       (no original question text), all data collected in one place
-       at the top of the file, figures shown with plt.show() instead
-       of being saved to disk
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 
 # ======================================================================
-# SECTION 1 : DATA
+#                           DATA AND PARAMETERS
 # ======================================================================
 
-# ---- General data (shared by the whole process) ----
-rho = 1000.0                # liquid density [kg/m^3]
-rho_p = 1150.0               # debris particle density [kg/m^3]
+# ---- General data ----
+rho = 1000.0                  # liquid density [kg/m^3]
+rho_p = 1150.0                # debris particle density [kg/m^3]
 mu = 1e-3                     # liquid viscosity [Pa*s]
 Qf = 1.2 / 3600               # feed volumetric flow rate [m^3/s] (1.2 m^3/h)
 Cf_cells = 2.0                # debris concentration in the feed [kg/m^3]
@@ -38,7 +19,7 @@ Cf_protein = 2.0 * 1000       # protein concentration in the feed [g/m^3] (2 g/L
 Dp = 100e-6                   # minimal particle diameter to separate [m]
 omega = 2000.0                # angular velocity of the centrifuge [rad/s]
 r1 = 0.02                     # liquid surface radius [m]
-r2 = 0.06                     # bowl wall radius [m]
+r2 = 0.06                     # centrifuge wall radius [m]
 K_stokes_max = 3.3            # upper K boundary of the Stokes regime
 K_newton_min = 43.6           # lower K boundary of the Newton regime
 
